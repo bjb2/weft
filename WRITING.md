@@ -82,6 +82,10 @@ export default {
   line.
 - Every enemy `open`/`tele` line is player-visible and IS linted — write them like prose, not
   stat blocks.
+- Dialogue lines (`@speaker: …`) are player-visible and ARE linted (the spoken
+  text, not the speaker tag). Give each character a mouth: vary cadence between
+  speakers, and keep adverb dialogue tags out — the bubble already names who is
+  talking, so write the line, not "she said softly".
 
 ## 7. Workflow
 

@@ -20,10 +20,20 @@ export const STYLES = {
     framing: "landscape illustration plate, soft vignette, no text",
     palette: { "--bg": "#1c1812", "--bg2": "#2a241a", "--panel": "#241f17", "--ink": "#efe6d4", "--dim": "#a99c84", "--accent": "#e0a85a", "--accent2": "#b07d3a", "--good": "#7fae6a", "--bad": "#d2705a", "--cool": "#6fa5a0", "--line": "#3a3326" },
   },
-  pixel: {
-    descriptor: "16-bit pixel-art scene, limited palette, dithering, crisp pixels, retro JRPG dungeon aesthetic, dramatic torchlight",
-    framing: "side-on diorama, chunky pixels, no text",
-    palette: { "--bg": "#0d0e1b", "--bg2": "#1a1c2e", "--panel": "#161827", "--ink": "#c7d0e0", "--dim": "#6f7aa0", "--accent": "#5fd68a", "--accent2": "#2f8f57", "--good": "#5fd68a", "--bad": "#e05f6a", "--cool": "#5f9fd6", "--line": "#262a44" },
+  comic: {
+    descriptor: "bold modern comic-book / graphic-novel illustration, confident clean ink linework, flat saturated colors, subtle halftone shading, expressive cartoon characters, dynamic energy",
+    framing: "single dramatic panel, strong composition, no text, no speech bubbles, no captions, no panel borders",
+    palette: { "--bg": "#12131c", "--bg2": "#1d1f2e", "--panel": "#181a26", "--ink": "#e8e6f0", "--dim": "#8b90a8", "--accent": "#ffd23f", "--accent2": "#e0902e", "--good": "#06d6a0", "--bad": "#ef476f", "--cool": "#4cc9f0", "--line": "#2a2d40" },
+  },
+  flat: {
+    descriptor: "clean modern flat-vector editorial illustration, bold simple geometric shapes, smooth subtle gradients, tasteful limited palette, generous negative space, minimal detail",
+    framing: "landscape editorial illustration, no text, no logos",
+    palette: { "--bg": "#0f1419", "--bg2": "#172029", "--panel": "#141c24", "--ink": "#e4ebf0", "--dim": "#7e8a98", "--accent": "#f4a259", "--accent2": "#bb6b34", "--good": "#5fb88f", "--bad": "#e06a6a", "--cool": "#5b9bd5", "--line": "#22303b" },
+  },
+  anime: {
+    descriptor: "polished modern anime key-visual illustration, clean cel shading, vivid colors, soft rim light, expressive characters, detailed background",
+    framing: "cinematic key visual, no text, no captions",
+    palette: { "--bg": "#0e1018", "--bg2": "#1a1d2e", "--panel": "#161a28", "--ink": "#e9ecf6", "--dim": "#888fa6", "--accent": "#ff8fb1", "--accent2": "#c75f86", "--good": "#6bd6a8", "--bad": "#ef5d6c", "--cool": "#6cc4f0", "--line": "#262a3e" },
   },
   oil: {
     descriptor: "moody oil painting, thick impasto brushwork, romantic-era landscape drama, rich earthy palette with one luminous highlight, museum-grade chiaroscuro",

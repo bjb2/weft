@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>weft editor</title>
+<style>
+  :root{--bg:#0d0f17;--bg2:#151926;--panel:#161a28;--ink:#dce3f0;--dim:#828aa6;--accent:#e8c15a;--accent2:#a8862e;--good:#58b890;--bad:#e0606a;--cool:#7ea7d8;--line:#283150}
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);height:100vh;display:flex;flex-direction:column;overflow:hidden}
+  header{display:flex;align-items:center;gap:14px;padding:8px 14px;background:var(--bg2);border-bottom:1px solid var(--line);flex:0 0 auto}
+  header h1{font-size:15px;margin:0;color:var(--accent);font-weight:600;letter-spacing:.3px}
+  header .sub{color:var(--dim);font-size:12px}
+  header .spacer{flex:1}
+  button{font:inherit;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 11px;cursor:pointer}
+  button:hover{border-color:var(--accent2)}
+  button.primary{background:var(--accent2);border-color:var(--accent2);color:#1a1404;font-weight:600}
+  button.danger{color:var(--bad)}
+  .status{font-size:12px;padding:4px 10px;border-radius:5px;border:1px solid var(--line)}
+  .status.ok{color:var(--good);border-color:#23402f} .status.err{color:var(--bad);border-color:#3f2329;cursor:pointer}
+  main{flex:1;display:flex;min-height:0}
+  #graph-wrap{flex:1;overflow:auto;background:radial-gradient(900px 600px at 30% 10%,#121726,var(--bg));position:relative}
+  #legend{position:absolute;top:8px;left:8px;font-size:11px;color:var(--dim);background:rgba(13,15,23,.8);border:1px solid var(--line);border-radius:6px;padding:6px 9px;line-height:1.7}
+  #legend b{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:middle}
+  aside{width:430px;flex:0 0 auto;border-left:1px solid var(--line);background:var(--bg2);overflow:auto;padding:14px}
+  aside h2{font-size:13px;margin:0 0 10px;color:var(--accent);letter-spacing:.4px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dim);margin:10px 0 3px}
+  input,select,textarea{width:100%;font:inherit;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:5px;padding:6px 8px}
+  textarea{min-height:120px;resize:vertical;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;line-height:1.5}
+  .row{display:flex;gap:8px}.row>*{flex:1}
+  .chk{display:flex;align-items:center;gap:6px;margin-top:10px}.chk input{width:auto}
+  .choice{border:1px solid var(--line);border-radius:6px;padding:9px;margin:8px 0;background:var(--bg)}
+  .choice .top{display:flex;gap:6px;align-items:center}
+  .choice .top input{flex:1}
+  .choice .adv{margin-top:6px;display:none}
+  .choice.show-adv .adv{display:block}
+  .choice .mini{font-size:11px;color:var(--dim);background:none;border:none;padding:2px 4px;cursor:pointer}
+  .nodebox{cursor:pointer}
+  .nodebox rect{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+  .nodebox text{fill:var(--ink);font-size:12px}
+  .nodebox .tag{font-size:9px;fill:var(--dim)}
+  .nodebox.start rect{stroke:var(--accent);stroke-width:2.5}
+  .nodebox.ending rect{fill:#23200f;stroke:var(--accent)}
+  .nodebox.combat rect{fill:#2a1116;stroke:var(--bad)}
+  .nodebox.unreach rect{stroke:var(--bad);stroke-dasharray:4 3}
+  .nodebox.sel rect{stroke:var(--cool);stroke-width:3}
+  .edge{fill:none;stroke:#3a4570}
+  .edge.choice{stroke:#41507a}.edge.win{stroke:var(--good)}.edge.lose{stroke:var(--bad)}.edge.dynamic{stroke:var(--accent2);stroke-dasharray:5 4}
+  #errors{color:var(--bad);font-size:12px;white-space:pre-wrap;margin-top:8px;display:none;border-top:1px solid var(--line);padding-top:8px}
+  #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--accent2);border-radius:6px;padding:8px 16px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+  #toast.show{opacity:1}
+  .empty{color:var(--dim);font-style:italic;margin-top:30px;text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>weft editor</h1>
+  <span class="sub" id="gametitle"></span>
+  <span class="status" id="status">…</span>
+  <span class="spacer"></span>
+  <button id="btn-new">+ New scene</button>
+  <button id="btn-reload">Reload</button>
+</header>
+<main>
+  <div id="graph-wrap">
+    <div id="legend">
+      <div><b style="background:var(--accent)"></b>start / ending</div>
+      <div><b style="background:var(--bad)"></b>combat</div>
+      <div><b style="background:var(--accent2)"></b>dynamic choice</div>
+      <div><b style="border:1px dashed var(--bad);background:none"></b>unreachable</div>
+    </div>
+    <svg id="graph"></svg>
+  </div>
+  <aside id="editor"><div class="empty">Click a scene in the graph to edit it, or “+ New scene”.</div></aside>
+</main>
+<datalist id="sceneids"></datalist>
+<datalist id="enemies"></datalist>
+<div id="toast"></div>
+
+<script>
+const $ = (s, r=document) => r.querySelector(s);
+const el = (t, a={}, kids=[]) => { const e=document.createElement(t); for(const k in a){ if(k==="class")e.className=a[k]; else if(k==="html")e.innerHTML=a[k]; else if(k.startsWith("on"))e.addEventListener(k.slice(2),a[k]); else e.setAttribute(k,a[k]); } for(const c of [].concat(kids)) e.append(c.nodeType?c:document.createTextNode(c)); return e; };
+let STATE=null, CUR=null;
+
+function toast(m){ const t=$("#toast"); t.textContent=m; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),1600); }
+
+async function api(path, opts){ const r=await fetch(path,opts); return r.json(); }
+
+async function load(){ STATE = await api("/api/state"); render(); }
+
+function render(){
+  $("#gametitle").textContent = (STATE.meta.title||STATE.meta.id||"") + " · " + STATE.graph.nodes.length + " scenes";
+  const st=$("#status"); const c=STATE.compile;
+  st.className = "status " + (c.ok?"ok":"err");
+  st.textContent = c.ok ? "✓ builds" : ("✗ " + c.errors.length + " error"+(c.errors.length>1?"s":""));
+  st.onclick = c.ok ? null : ()=>alert("Build errors:\n\n"+c.errors.join("\n"));
+  // datalists
+  $("#sceneids").innerHTML = STATE.sceneIds.map(id=>`<option value="${id}">`).join("");
+  $("#enemies").innerHTML = STATE.enemies.map(id=>`<option value="${id}">`).join("");
+  drawGraph();
+}
+
+function drawGraph(){
+  const {nodes,edges,start}=STATE.graph;
+  const byId={}; nodes.forEach(n=>byId[n.id]=n);
+  // BFS depth from start
+  const depth={}; depth[start]=0; const q=[start];
+  const adj={}; edges.forEach(e=>(adj[e.from]??=[]).push(e.to));
+  while(q.length){ const n=q.shift(); for(const t of (adj[n]||[])) if(byId[t]&&depth[t]===undefined){ depth[t]=depth[n]+1; q.push(t);} }
+  let maxd=0; nodes.forEach(n=>{ if(depth[n.id]!==undefined) maxd=Math.max(maxd,depth[n.id]); });
+  const unreachCol=maxd+1;
+  nodes.forEach(n=>{ if(depth[n.id]===undefined) n._d=unreachCol; else n._d=depth[n.id]; });
+  // group by column
+  const cols={}; nodes.slice().sort((a,b)=>a.id.localeCompare(b.id)).forEach(n=>{ (cols[n._d]??=[]).push(n); });
+  const COLW=210, NODEW=158, NODEH=46, ROWH=64, PADX=30, PADY=30;
+  const pos={};
+  for(const d in cols) cols[d].forEach((n,i)=>{ pos[n.id]={x:PADX+d*COLW, y:PADY+i*ROWH}; });
+  const maxRows=Math.max(...Object.values(cols).map(c=>c.length),1);
+  const W=PADX*2+(unreachCol+1)*COLW, H=PADY*2+maxRows*ROWH;
+  const svg=$("#graph"); svg.setAttribute("width",W); svg.setAttribute("height",H); svg.setAttribute("viewBox",`0 0 ${W} ${H}`);
+  let s=`<defs>
+    <marker id="ar" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0L8 4L0 8z" fill="#5566"/></marker>
+  </defs>`;
+  // edges
+  for(const e of edges){ const a=pos[e.from], b=pos[e.to]; if(!a||!b) continue;
+    const x1=a.x+NODEW, y1=a.y+NODEH/2, x2=b.x, y2=b.y+NODEH/2;
+    const mx=(x1+x2)/2;
+    s+=`<path class="edge ${e.kind}" d="M${x1} ${y1} C ${mx} ${y1}, ${mx} ${y2}, ${x2} ${y2}" marker-end="url(#ar)"/>`;
+  }
+  // nodes
+  for(const n of nodes){ const p=pos[n.id];
+    const cls=["nodebox"]; if(n.isStart)cls.push("start"); if(n.ending)cls.push("ending"); if(n.combat)cls.push("combat"); if(!n.reachable&&!n.isStart)cls.push("unreach"); if(CUR===n.id)cls.push("sel");
+    const tag=[n.combat?"combat":"", n.ending?"ending":"", n.dynamic?"dyn":"", n.choices?n.choices+"→":""].filter(Boolean).join(" ");
+    s+=`<g class="${cls.join(' ')}" data-id="${n.id}" transform="translate(${p.x},${p.y})">
+      <rect width="${NODEW}" height="${NODEH}" rx="7"/>
+      <text x="10" y="20">${n.id}</text>
+      <text class="tag" x="10" y="35">${tag}</text>
+    </g>`;
+  }
+  svg.innerHTML=s;
+  svg.querySelectorAll(".nodebox").forEach(g=>g.addEventListener("click",()=>openScene(g.dataset.id)));
+}
+
+async function openScene(id){
+  const sc = await api("/api/scene?id="+encodeURIComponent(id));
+  if(sc.error){ toast(sc.error); return; }
+  CUR=id; drawGraph(); renderEditor(sc, false);
+}
+function newScene(){ CUR=null; drawGraph(); renderEditor({ id:"", file:STATE.files[0], raw:false, attrs:{}, body:"", choices:[] }, true); }
+
+function renderEditor(sc, isNew){
+  const a=sc.attrs||{};
+  const ed=$("#editor"); ed.innerHTML="";
+  ed.append(el("h2",{},isNew?"New scene":("Edit: "+sc.id)));
+
+  const idIn=el("input",{value:sc.id||"",placeholder:"scene_id",...(isNew?{}:{readonly:"readonly"})});
+  ed.append(el("label",{},"Scene id"+(isNew?" (letters/digits/_)":"")), idIn);
+
+  let fileSel=null;
+  if(isNew){ fileSel=el("select",{}, STATE.files.map(f=>el("option",{value:f},f))); fileSel.value=sc.file||STATE.files[0];
+    ed.append(el("label",{},"File"), fileSel); }
+
+  const rawChk=el("input",{type:"checkbox"}); rawChk.checked=!!sc.raw;
+  const rawWrap=el("label",{class:"chk"},[rawChk,"raw scene (verbatim JS body)"]);
+  ed.append(rawWrap);
+
+  // attribute fields
+  const artIn=el("input",{value:a.art||"",placeholder:"asset name (assets/<name>.png)"});
+  const briefIn=el("input",{value:a.brief||"",placeholder:"art brief (subject for image gen)"});
+  const combatIn=el("input",{list:"enemies",value:a.combat||"",placeholder:"(none) — enemy id for a fight"});
+  const winIn=el("input",{list:"sceneids",value:a.win||"",placeholder:"win -> scene"});
+  const loseIn=el("input",{list:"sceneids",value:a.lose||"",placeholder:"lose -> scene"});
+  const endChk=el("input",{type:"checkbox"}); endChk.checked=a.ending==="true"||a.ending===true;
+  const bodyIn=el("textarea",{placeholder:"Scene prose. Blank lines = paragraphs. !! system box  ~~~ divider  [[if expr]]…[[end]]"});
+  bodyIn.value=sc.body||"";
+
+  const attrBox=el("div");
+  attrBox.append(el("label",{},"Art asset"),artIn,el("label",{},"Art brief"),briefIn);
+  const combatBox=el("div");
+  combatBox.append(el("label",{},"Combat enemy"),combatIn);
+  const wl=el("div",{class:"row"}); const winB=el("div"),loseB=el("div");
+  winB.append(el("label",{},"On win"),winIn); loseB.append(el("label",{},"On lose"),loseIn); wl.append(winB,loseB);
+  combatBox.append(wl);
+  const endBox=el("label",{class:"chk"},[endChk,"ending (terminal scene)"]);
+
+  ed.append(attrBox, combatBox, endBox, el("label",{},"Prose / body"), bodyIn);
+
+  // choices
+  const choicesWrap=el("div");
+  ed.append(el("label",{},"Choices"), choicesWrap);
+  const addChoiceBtn=el("button",{onclick:()=>choicesWrap.append(choiceRow({}))},"+ add choice");
+  ed.append(addChoiceBtn);
+  (sc.choices||[]).forEach(c=>choicesWrap.append(choiceRow(c)));
+
+  // toggle visibility by raw
+  function syncRaw(){ const r=rawChk.checked; for(const x of [attrBox,combatBox,endBox,choicesWrap,addChoiceBtn]) x.style.display=r?"none":""; }
+  rawChk.addEventListener("change",syncRaw); syncRaw();
+
+  // actions
+  const errBox=el("div",{id:"errors"});
+  const saveBtn=el("button",{class:"primary",onclick:async()=>{
+    const scene={ id:idIn.value.trim(), raw:rawChk.checked, body:bodyIn.value };
+    if(isNew) scene.file=fileSel.value;
+    if(!rawChk.checked){
+      scene.attrs={}; const A=scene.attrs;
+      if(artIn.value.trim())A.art=artIn.value.trim();
+      if(briefIn.value.trim())A.brief=briefIn.value.trim();
+      if(combatIn.value.trim()){A.combat=combatIn.value.trim();A.win=winIn.value.trim();A.lose=loseIn.value.trim();}
+      if(endChk.checked)A.ending="true";
+      scene.choices=[...choicesWrap.querySelectorAll(".choice")].map(rowToChoice).filter(c=>c.label);
+    }
+    const res=await api("/api/scene",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(scene)});
+    if(res.error){ errBox.style.display="block"; errBox.textContent=res.error; return; }
+    STATE=res; CUR=scene.id; render();
+    toast(res.compile.ok?("Saved → "+res.savedTo+" ✓ builds"):("Saved → "+res.savedTo+" — build errors (see ✗ status)"));
+    openScene(scene.id); // re-open in edit mode (gives Delete/Preview for newly-created scenes)
+  }},"Save");
+  const previewBtn=el("button",{onclick:()=>window.open("/game/index.html?scene="+encodeURIComponent(idIn.value.trim()),"_blank")},"Preview ▶");
+  const delBtn = isNew?null:el("button",{class:"danger",onclick:async()=>{ if(!confirm("Delete scene "+sc.id+"?"))return; const res=await api("/api/delete",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({id:sc.id})}); STATE=res; CUR=null; render(); $("#editor").innerHTML='<div class="empty">Deleted. Pick another scene.</div>'; }},"Delete");
+  const bar=el("div",{class:"row"},[saveBtn,previewBtn,...(delBtn?[delBtn]:[])]);
+  bar.style.marginTop="14px";
+  ed.append(bar, errBox);
+}
+
+function choiceRow(c){
+  const row=el("div",{class:"choice"});
+  const label=el("input",{value:c.label||"",placeholder:"choice label"});
+  const target=el("input",{list:"sceneids",value:c.target||"",placeholder:"-> scene"});
+  const advBtn=el("button",{class:"mini",onclick:()=>row.classList.toggle("show-adv")},"adv");
+  const del=el("button",{class:"mini",onclick:()=>row.remove()},"✕");
+  const top=el("div",{class:"top"},[label,target,advBtn,del]);
+  const req=el("input",{value:c.req||"",placeholder:"req: expr | locked hint"});
+  const doIn=el("input",{value:c.do||"",placeholder:"do: statements (flag('x'); give('y'))"});
+  const hide=el("input",{value:c.hide||"",placeholder:"hide: expr"});
+  const go=el("input",{value:c.go||"",placeholder:"go: dynamic target expr (overrides ->)"});
+  const adv=el("div",{class:"adv"},[el("label",{},"req"),req,el("label",{},"do"),doIn,el("label",{},"hide"),hide,el("label",{},"go (dynamic)"),go]);
+  if(c.req||c.do||c.hide||c.go) row.classList.add("show-adv");
+  row.append(top,adv);
+  row._get=()=>({label:label.value.trim(),target:target.value.trim()||null,req:req.value.trim(),do:doIn.value.trim(),hide:hide.value.trim(),go:go.value.trim()});
+  return row;
+}
+function rowToChoice(row){ const c=row._get(); const o={label:c.label}; if(c.go)o.go=c.go; else if(c.target)o.target=c.target; for(const k of ["req","do","hide"]) if(c[k])o[k]=c[k]; return o; }
+
+$("#btn-new").onclick=newScene;
+$("#btn-reload").onclick=load;
+load();
+</script>
+</body>
+</html>

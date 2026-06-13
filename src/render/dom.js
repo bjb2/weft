@@ -41,8 +41,8 @@ const STYLE = `
 .weft button.ch .req{color:var(--dim);font-size:13px}
 .weft button.ch .cost{color:var(--cool);font-size:13px}
 .weft .say{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px}
-.weft .say .pfp{flex:0 0 auto;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--cc,var(--accent2));color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px/1 Georgia,serif;border:1px solid var(--line)}
-.weft .say .pfp img{width:100%;height:100%;object-fit:cover;display:block}
+.weft .say .pfp{position:relative;flex:0 0 auto;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--cc,var(--accent2));color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px/1 Georgia,serif;border:1px solid var(--line)}
+.weft .say .pfp img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}
 .weft .say .utter{flex:1 1 auto;min-width:0}
 .weft .say .who{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--cc,var(--accent));margin-bottom:3px}
 .weft .say .bubble{display:inline-block;background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--cc,var(--accent2));border-radius:4px;padding:8px 13px}

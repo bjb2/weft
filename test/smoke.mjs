@@ -36,6 +36,10 @@ const def = {
       moves: [{ n: "Flail", d: 3 }, { n: "Wobble", d: 2 }],
     },
   },
+  cast: {
+    guide: { name: "The Guide", pfp: "guide", color: "#7ea7d8" },
+    hero: { self: true, pfp: "hero" },   // no name -> falls back to state.name
+  },
 };
 
 const scenes = {
@@ -67,6 +71,17 @@ let v = game.view();
 assert.equal(v.kind, "scene");
 assert.equal(v.hud.stats.mind, 4, "base mind 4");
 console.log("start:", toText(v.html));
+// Dialogue: SAY() builds a render-neutral chat bubble; toText() projects "Name: line".
+const cx = game.context();
+const say = cx.SAY("guide", `Well met, ${game.state.name}.`);
+assert.ok(/class="say"/.test(say) && say.includes('data-pfp="guide"'), "guide bubble carries pfp");
+assert.ok(say.includes("--cc:#7ea7d8"), "speaker color applied");
+assert.equal(toText(say), "The Guide: Well met, Tester.", "named speaker projects to text");
+assert.match(cx.SAY("hero", "On my way."), /class="say self"/, "self speaker is right-aligned");
+assert.equal(toText(cx.SAY("hero", "On my way.")), "Tester: On my way.", "self with no name falls back to state.name");
+assert.equal(toText(cx.SAY("ghost", "boo")), "ghost: boo", "undeclared speaker degrades to its id");
+console.log("dialogue:", toText(say));
+
 
 game.choose("c0"); // take + equip charm
 v = game.view();

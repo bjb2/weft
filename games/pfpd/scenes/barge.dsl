@@ -1,6 +1,6 @@
 --- barge
 art: barge
-brief: a flat tourist river-barge crowded with phones held up, a cartoon avatar standing at the prow ready to perform, neon reflections on the water
+brief: a flat tourist river-barge gliding down the same neon-lit San Antonio riverwalk, string lights overhead and neon reflections on the green water, the crew of avatars aboard among tourists holding up phones, one avatar striking a pose at the prow, a smug crypto-bro avatar facing off against them
 You board a river-barge tour by simply walking on and acting like you belong, which is ninety percent of everything. The captain narrates local history nobody is listening to. Forty tourists hold up forty phones. This is not a boat. This is a stage, and a stage is the only church you have ever prayed in.
 
 A rival catches your eye: a smug crypto-bro avatar named ChadGPT, also clearly isekai'd, also clearly hungry for the algorithm. He smirks. The barge goes quiet. It is a meme-off, and the river itself is watching.

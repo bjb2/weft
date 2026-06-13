@@ -9,7 +9,7 @@ const GAME_JS = (id, title) => `// ${title} — weft game definition (manifest).
 export default {
   meta: { id: ${JSON.stringify(id)}, title: ${JSON.stringify(title)}, subtitle: "an interactive fiction", saveVersion: 1,
     theme: { "--accent": "#e8c15a" },
-    art: { style: "ink-wash" } },          // ink-wash | noir | storybook | pixel | oil (sets art + UI palette)
+    art: { style: "ink-wash" } },          // ink-wash | comic | flat | anime | storybook | noir | oil (sets art + UI palette)
   start: "start",
   // HUD panels (top-level). Each becomes a "✦ Title" button opening an overlay.
   surfaces: {
@@ -29,6 +29,14 @@ export default {
   },
   enemies: {
     // key: { name, hp, open, moves:[{n,d}], p2?, p2at?, p2text?, interventions? }
+  },
+  // Speaking characters. Each "@id: line" of dialogue in a scene resolves to one
+  // of these for its display name + profile picture. "pfp" names an
+  // assets/<pfp>.{png,svg} portrait (a circular placeholder is auto-generated);
+  // "self: true" marks the player (right-aligned bubble); "color" tints both.
+  cast: {
+    you:      { name: "You", pfp: "you", self: true, color: "#e8c15a" },
+    stranger: { name: "the Stranger", pfp: "stranger", color: "#7ea7d8" },
   },
   // Enable systems your game uses. Omit combat entirely for pure narrative.
   systems: {
@@ -68,7 +76,9 @@ You reached the summit of the smallest possible story. Replace this with your ow
 
 --- low
 [[if v.met_stranger]]
-A stranger falls into step beside you and says nothing, which is somehow companionable.
+A stranger falls into step beside you.
+@stranger: Long road for one set of boots. Mind the company?
+@you: I have walked worse alone. Stay if you like.
 [[else]]
 You walk alone.
 [[end]]

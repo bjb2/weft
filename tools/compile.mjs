@@ -94,6 +94,8 @@ function parseFile(text, file) {
     if (!cur) { if (t && !t.startsWith("#")) throw new Error(`${file}: content before first scene: ${t}`); continue; }
     if (cur.inAttrs && (m = t.match(/^(art|combat|win|lose|ending):\s*(\S+)$/))) { cur.attrs[m[1]] = m[2]; continue; }
     if (cur.inAttrs && /^brief:\s*/.test(t)) continue; // art-production metadata (used by tools/art.mjs), not prose
+    if (cur.inAttrs && (m = t.match(/^cast:\s*(.+)$/))) { cur.castRefs = m[1].split(",").map((s) => s.trim()).filter(Boolean); continue; } // scene's on-screen characters (art references)
+    if (cur.inAttrs && /^ref:\s*/.test(t)) continue; // art-generation conditioning hint (used by tools/art.mjs), not prose
     cur.inAttrs = false;
     if (cur.raw) { cur.body.push(raw); continue; }
     if ((m = t.match(/^\* (.+?)(?:\s*->\s*(\w+))?$/))) { cur.choices.push({ label: m[1], target: m[2] || null }); inChoices = true; continue; }
@@ -110,12 +112,13 @@ export async function compileGame(gameDir) {
   const files = (await readdir(srcDir).catch(() => [])).filter((f) => f.endsWith(".dsl"));
   if (!files.length) throw new Error("no .dsl files in " + srcDir);
 
-  const ids = new Set(), links = [], combats = [], chunks = [];
+  const ids = new Set(), links = [], combats = [], chunks = [], sceneCasts = [];
   for (const f of files.sort()) {
     const scenes = parseFile(await readFile(join(srcDir, f), "utf8"), f);
     for (const sc of scenes) {
       if (ids.has(sc.id)) throw new Error(`duplicate scene id: ${sc.id} (${f})`);
       ids.add(sc.id);
+      if (sc.castRefs) sceneCasts.push({ id: sc.id, refs: sc.castRefs, f });
       chunks.push(compileScene(sc, f, links, combats));
     }
   }
@@ -143,6 +146,9 @@ export async function compileGame(gameDir) {
   const castIds = new Set(Object.keys(def.cast || {}));
   for (const m of blob.matchAll(/\bSAY\(\s*["']([\w$]+)["']/g))
     if (!castIds.has(m[1])) errors.push(`speaker "@${m[1]}" is not a declared character (add it to def.cast)`);
+  // 6. scene cast (art references): every `cast:` id must be a declared character.
+  for (const { id, refs, f } of sceneCasts) for (const r of refs)
+    if (!castIds.has(r)) errors.push(`${f}: ${id} cast lists "${r}" which is not in def.cast`);
 
   if (errors.length) { const e = new Error("compile failed:\n  " + errors.join("\n  ")); e.errors = errors; throw e; }
 

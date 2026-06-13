@@ -1,0 +1,4 @@
+[
+  { "name": "the long way (stay)", "seed": 1, "script": ["c0", "c0", "c0"], "expect": { "scene": "end_stay", "ending": true } },
+  { "name": "the short way (leave)", "seed": 2, "script": ["c0", "c1", "c1"], "expect": { "scene": "end_leave", "ending": true } }
+]

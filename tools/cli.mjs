@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 // weft CLI: build | audit | test | play | new | all  <gameDir>
-import { compileGame } from "./compile.mjs";
-import { bundleGame } from "./bundle.mjs";
+import { buildGame } from "./build.mjs";
 import { auditGame } from "./audit.mjs";
 import { testGame } from "./test.mjs";
 import { loadGame } from "./load.mjs";
 import { scaffold } from "./scaffold.mjs";
 import { lintGame } from "./prose-lint.mjs";
 import { artGame } from "./art.mjs";
+import { startEditor } from "./editor.mjs";
+import { buildPortal } from "./portal.mjs";
 import { loadEnv } from "./env.mjs";
-import { resolveStyle } from "../src/art/styles.js";
 import { fileURLToPath } from "node:url";
 import { createGame } from "../src/engine.js";
 import { toText } from "../src/markup.js";
-import { writeFile } from "node:fs/promises";
 import { join, resolve, relative, dirname } from "node:path";
 import readline from "node:readline";
+import { readdir } from "node:fs/promises";
 
 const [cmd, ...rest] = process.argv.slice(2);
 const dir = rest[0] ? resolve(rest[0]) : null;
@@ -23,43 +23,19 @@ const need = () => { if (!dir) die("usage: weft " + cmd + " <gameDir>"); };
 const die = (m) => { console.error(m); process.exit(1); };
 const ok = (m) => console.log(m);
 
-// Load .env (project root, then game dir) so users can drop in OPENROUTER_API_KEY.
+// Load .env so users can drop in OPENROUTER_API_KEY (game dir takes precedence).
 const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
-loadEnv(join(REPO, ".env"));
+// Most-specific file wins: a game's own .env overrides the repo-root .env, and a
+// real shell environment variable overrides both (loadEnv never clobbers an
+// already-set value, so the first .env loaded takes precedence).
 if (dir) loadEnv(join(dir, ".env"));
-
-async function writeIndex(gameDir, def, bundleName, theme) {
-  const bg = (theme && theme["--bg"]) || "#0a0d14";
-  const html = `<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="${bg}">
-<title>${def.meta.title}</title>
-<meta name="description" content="${(def.meta.subtitle || "").replace(/"/g, "&quot;")}">
-<style>html,body{margin:0;background:${bg}}</style></head>
-<body><div id="game"></div>
-<!-- Self-contained bundle (works from file:// and any static host). The hash in
-     the filename busts caches on deploy without a query string. -->
-<script src="build/${bundleName}"></script>
-</body></html>
-`;
-  await writeFile(join(gameDir, "index.html"), html);
-}
+loadEnv(join(REPO, ".env"));
 
 async function build(gameDir) {
-  const r = await compileGame(gameDir);
-  ok(`compiled ${r.scenes} scenes, ${r.links} links, ${r.combats} combats`);
-  const def = (await loadGame(gameDir)).def;
-  // Art style sets both the illustration look and the UI palette; explicit
-  // def.meta.theme overrides the preset palette.
-  const style = resolveStyle(def.meta && def.meta.art);
-  const theme = { ...(style ? style.palette : {}), ...((def.meta && def.meta.theme) || {}) };
-  const art = await artGame(gameDir, { generate: false }); // ensure styled SVG placeholders + prompts.json
-  const srcDir = resolve(gameDir, "../../src");
-  const bundleName = await bundleGame(gameDir, srcDir, { theme });
-  await writeIndex(gameDir, def, bundleName, theme);
-  ok(`art: ${art.slots} slots (${art.placeholders} placeholders), style ${art.style}`);
-  ok(`bundled -> build/${bundleName}; wrote index.html`);
+  const r = await buildGame(gameDir);
+  ok(`compiled ${r.compiled.scenes} scenes, ${r.compiled.links} links, ${r.compiled.combats} combats`);
+  ok(`art: ${r.art.slots} scene slots${r.art.casts ? ` + ${r.art.casts} character portraits` : ""} (${r.art.placeholders} placeholders), style ${r.art.style}`);
+  ok(`bundled -> build/${r.bundleName}; wrote index.html`);
 }
 
 async function audit(gameDir) {
@@ -132,13 +108,57 @@ async function lint(gameDir, { gate = false } = {}) {
 }
 
 async function art(gameDir) {
-  const generate = rest.includes("--generate") || rest.includes("-g");
+  const portraitsOnly = rest.includes("--portraits");
+  const generate = portraitsOnly || rest.includes("--generate") || rest.includes("-g");
+  const only = rest.slice(1).filter((a) => !a.startsWith("-")); // positional slot/portrait names after gameDir
   if (generate && !process.env.OPENROUTER_API_KEY) ok("  (no OPENROUTER_API_KEY in env/.env — writing SVG placeholders + prompts only)");
-  const r = await artGame(gameDir, { generate });
+  const r = await artGame(gameDir, { generate, only: only.length ? only : null, portraitsOnly });
   ok(`\nART ${relative(process.cwd(), gameDir)} — style ${r.style}`);
-  ok(`  ${r.slots} art slots: ${r.names.join(", ")}`);
+  ok(`  ${r.slots} scene slots: ${r.names.join(", ")}${r.casts ? ` (+ ${r.casts} character portraits)` : ""}`);
   ok(`  wrote art/prompts.json + ${r.placeholders} SVG placeholder(s) in assets/`);
-  if (generate && process.env.OPENROUTER_API_KEY) ok("  generated PNGs via OpenRouter");
+  if (generate) {
+    ok(`  phase: ${portraitsOnly ? "character portraits only" : "scenes (conditioned on character portraits)"}`);
+    if (only.length) ok(`  targeting: ${only.join(", ")}`);
+    ok(`  generated ${r.generated}/${r.attempted} PNG(s) via OpenRouter`);
+    if (r.failures.length) { ok("  failures:"); for (const f of r.failures.slice(0, 12)) ok(`    ${f.name}: ${f.reason}`); }
+    if (r.attempted > 0 && r.generated === 0) die("  no images were generated — check OPENROUTER_API_KEY (https://openrouter.ai/keys), model access, and credits");
+  }
+}
+
+async function edit(gameDir) {
+  const portArg = rest.find((a) => /^--port=\d+$/.test(a));
+  const port = portArg ? Number(portArg.split("=")[1]) : 4317;
+  try { await build(gameDir); } catch (e) { ok("(initial build had errors — open the editor to fix)\n  " + (e.errors ? e.errors.join("\n  ") : e.message)); }
+  const { port: p } = await startEditor(gameDir, port);
+  ok(`\nweft editor running:  http://localhost:${p}/`);
+  ok(`  branch graph + scene editor for ${relative(process.cwd(), gameDir)}`);
+  ok(`  live preview:        http://localhost:${p}/game/index.html`);
+  ok(`  Ctrl-C to stop.`);
+}
+
+// Whole-repo: write the landing page that links to every game's build.
+async function portal() {
+  const r = await buildPortal(REPO);
+  ok(`\nPORTAL ${relative(process.cwd(), REPO) || "."}`);
+  ok(`  ${r.games} game(s): ${r.ids.join(", ")}`);
+  if (r.unbuilt.length) ok(`  unbuilt (shown disabled): ${r.unbuilt.join(", ")} — run: weft build games/<id> (or weft site)`);
+  ok(`  wrote index.html + .nojekyll (ready for GitHub Pages)`);
+}
+
+// Build every game under games/, then (re)generate the portal. The deploy step.
+async function site() {
+  const gamesDir = join(REPO, "games");
+  const ids = (await readdir(gamesDir, { withFileTypes: true }))
+    .filter((d) => d.isDirectory() && !d.name.startsWith("_") && !d.name.startsWith("."))
+    .map((d) => d.name).sort();
+  ok(`\nSITE — building ${ids.length} game(s)`);
+  let made = 0;
+  for (const id of ids) {
+    try { const r = await buildGame(join(gamesDir, id)); ok(`  built ${id} (${r.compiled.scenes} scenes)`); made++; }
+    catch (e) { ok(`  SKIP ${id}: ${e.errors ? e.errors.join("; ") : e.message}`); }
+  }
+  ok(`  built ${made}/${ids.length}`);
+  await portal();
 }
 
 (async () => {
@@ -149,12 +169,15 @@ async function art(gameDir) {
     case "lint": need(); await lint(dir); break;
     case "art": need(); await art(dir); break;
     case "play": need(); await build(dir); await play(dir); break;
+    case "edit": need(); await edit(dir); break;
     case "all": need(); await build(dir); await audit(dir); await lint(dir, { gate: true }); await test(dir); break;
     case "new": {
       need(); const id = rest[1] || dir.split(/[\\/]/).pop(); const title = rest[2] || id;
       await scaffold(dir, id, title); ok(`scaffolded ${id} at ${relative(process.cwd(), dir)}`);
       await build(dir); await audit(dir); await test(dir); break;
     }
-    default: die("usage: weft <build|audit|test|lint|art|play|all|new> <gameDir> [--warn|--generate]");
+    case "portal": await portal(); break;
+    case "site": await site(); break;
+    default: die("usage: weft <build|audit|test|lint|art|play|edit|all|new> <gameDir> | <portal|site>  [--warn|--generate|--port=N]");
   }
 })().catch((e) => die(e.stack || e.message));

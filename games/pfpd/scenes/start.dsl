@@ -1,6 +1,8 @@
 --- start
 art: title
-brief: a glowing phone screen tearing open like a portal, spilling cartoon profile-picture avatars onto a real-world river walkway at night
+ref: none
+brief: a huge glowing smartphone screen tearing open like a portal in the night sky over a downtown plaza, spilling four cartoon profile-picture avatars down into a splashing stone fountain below, neon chaos, dramatic splash-page composition, no text
+
 :: <h1>${G.def?.meta?.title||''}</h1>
 You were the single most reposted profile picture of the third quarter. Eleven million people woke up to your face every morning. You had a verified glow, a signature smirk, and, by design, exactly zero physical body.
 
@@ -9,7 +11,6 @@ Then someone with a cracked phone and a dream zoomed in too hard, the feed hiccu
 You land in a fountain. A real one. With water that is wet in a way no render has ever been. ${G.name}, you are in San Antonio, Texas, and the year is 2026, and a duck is judging you.
 
 * Pull your face out of the fountain -> squad
-
 --- squad
 A pixel-cat VTuber named Kit is wringing out her tail. A bored-looking ape in a tracksuit, Brett, keeps trying to long-press a pigeon. Sir Woof, who is a dog, who is also a meme, who is also somehow wearing a tiny hat, has already started a podcast about the experience.
 

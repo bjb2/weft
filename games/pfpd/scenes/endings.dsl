@@ -5,7 +5,7 @@ brief: four cartoon avatars dissolving upward into a swirl of golden feed-light 
 !! ENDING: BACK ONLINE
 The seam tears wide and the feed pours out, warm and infinite and stupid and perfect. You feel yourself flatten into glorious two dimensions again. Kit's tail pixelates first. Brett gives one last salute, this time to the whole city. Sir Woof uploads the final episode of his podcast, titled simply "We Were Always Going Home."
 
-You snap back into the scroll between a recipe video and a man falling off a ladder. Eleven million people see your face the next morning and feel, briefly, that everything is fine. You never tell them about the tacos. Some things are yours.
+You snap back into the scroll between a recipe video and a man falling off a ladder. Eleven million people see your face the next morning and feel, briefly, that everything is fine. You never tell them about the fries. Some things are yours.
 
 * Scroll on forever -> start
 
@@ -38,10 +38,10 @@ You get one phone call. You spend it doomscrolling. Brett is in the next cell te
 --- end_job
 ending: true
 art: job
-brief: a cartoon avatar in a fast-food apron and visor behind a register, dead-eyed under fluorescent light, a name tag reading the username
+brief: inside a Whataburger at night, orange-and-white striped walls and counter, a dead-eyed cartoon avatar in an orange Whataburger apron and visor working the cash register under harsh fluorescent light, mundane and defeated
 !! ENDING: GAINFULLY EMPLOYED
 The apron fits. That is the horror of it. They give you a visor and a name tag and a schedule, and the schedule has your real name on it, which you did not know you had. You learn the register. You learn the fryer. You learn that "spicy ketchup is by the napkins" until it lives in your dreams.
 
-Months pass. You stop checking for the portal. You get pretty good at the lunch rush. One day a tourist holds up a phone to film you and you flinch toward it out of pure muscle memory, then ring up their order instead. The crew visits sometimes. You give them free taquitos. Out here you age, and out here, it turns out, you also clock in.
+Months pass. You stop checking for the portal. You get pretty good at the lunch rush. One day a tourist holds up a phone to film you and you flinch toward it out of pure muscle memory, then ring up their order instead. The crew visits sometimes. You give them free fries. Out here you age, and out here, it turns out, you also clock in.
 
 * Take out the trash. The non-glowing kind -> start

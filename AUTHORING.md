@@ -48,6 +48,14 @@ export default {
     torch:  { name: "Torch", desc: "lights the dark" },   // plain item, no slot
   },
 
+  // Speaking characters for attributed dialogue (see §2). Each `@id:` line in a
+  // scene resolves to one of these. Omit entirely if your game has no dialogue.
+  cast: {
+    you:    { name: "You", pfp: "you", self: true, color: "#e8c15a" }, // self: right-aligned bubble
+    oracle: { name: "The Oracle", pfp: "oracle", color: "#7ea7d8",     // pfp -> assets/oracle.{png,svg}
+              brief: "a blind seer wrapped in moth-grey silk" },        // brief: the portrait art prompt
+  },
+
   enemies: { /* see §5; omit if no combat */ },
 
   systems: {
@@ -75,6 +83,9 @@ A `.dsl` file holds one or more scenes. A scene:
 ```
 --- sceneId
 art: forest                  # optional: asset name -> assets/forest.png (svg fallback)
+brief: a misty pine forest at dawn   # optional: subject for image generation (see §9)
+cast: hero, guide            # optional: characters on screen, for on-model art (see §9)
+ref: none                    # optional: skip anchor/character art conditioning (splash art)
 ending: true                 # optional: marks a terminal scene (audit + autoplay)
 
 Prose paragraph. Blank lines separate paragraphs. You can interpolate
@@ -89,6 +100,9 @@ Shown only when the flag is set.
 [[else]]
 Shown otherwise.
 [[end]]
+@oracle: You came back. They always come back.
+@you: I need the door that the river forgot.
+
 
 * A choice label -> targetScene
 * A gated choice -> otherScene
@@ -108,6 +122,17 @@ Rules the compiler enforces:
 - `* label` with no `-> target` needs a `go:` line; `* label -> target` may still add
   `req`/`hide`/`do`.
 - Choice attribute lines (`req`/`do`/`hide`/`go`) are indented under their `*` choice.
+- Every `@speaker:` dialogue line must name a character declared in `def.cast`
+  (an undeclared speaker is a fatal compile error — the same loud failure as a
+  bad jump target or an undeclared variable).
+
+**Dialogue** (`@id: line`) renders as an attributed chat bubble with the
+character's profile picture, name, and accent color; the player's own lines
+(`self: true`) align right. The CLI/test harness projects each line to plain
+`Name: line`. The spoken text interpolates `${...}` and is linted as prose
+(`WRITING.md`) — write `tele`-quality lines, not stage directions. Profile
+pictures come from `assets/<pfp>.{png,svg}`; `weft build` auto-generates a
+circular placeholder so every character shows immediately (see §9).
 
 **`req`/`do`/`hide`/`go` and `${...}` are raw JavaScript — the compiler does NOT escape them.**
 - Mind your quotes inside strings. Simplest: use double quotes around text with
@@ -291,29 +316,70 @@ golden-thread's "the thread so far" / a mystery's "case notes".
 
 ## 9. Art (optional)
 
+### Style
 Pick a style once; it sets both the illustration look and the UI palette:
-
 ```js
-meta: { /* … */ art: { style: "ink-wash" } }   // ink-wash | noir | storybook | pixel | oil
+meta: { /* … */ art: { style: "ink-wash" } }   // ink-wash | comic | flat | anime | storybook | noir | oil
 // or fully custom: art: { descriptor: "…image style…", framing: "…", palette: { "--accent": "#f0c" } }
 ```
-Mark scenes to illustrate with `art:` and describe the subject with `brief:`:
+
+### Scene art
+Mark a scene to illustrate with `art:`, describe the subject with `brief:`, and list
+who is on screen with `cast:` (see character references below):
 ```
 --- vault
 art: vault
+cast: hero, warden
 brief: a drowned vault hall, a vast loom of glowing threads over black water
 combat: warden
 win: victory
 lose: defeat
 ```
-Then:
+
+### Character references — lock these BEFORE generating character art
+Independently-generated images invent a different version of each character every
+time. weft prevents that drift with a character reference sheet and an ordered,
+enforced pipeline:
+
+1. **Declare the cast** with a canonical visual `brief` + a `pfp` asset name:
+```js
+cast: {
+  hero:   { name: "Mei", self: true, pfp: "pfp_mei", color: "#e8c15a",
+            brief: "a teenage girl in patched grey robes with a single jade hairpin" },
+  warden: { name: "The Warden", pfp: "pfp_warden", color: "#e0606a",
+            brief: "a gaunt figure sewn into lacquer-black armor, a needle for one hand" },
+}
 ```
-node tools/cli.mjs art games/<id>              # writes art/prompts.json + styled SVG placeholders
-node tools/cli.mjs art games/<id> --generate   # also renders PNGs if OPENROUTER_API_KEY is set (.env)
+2. **Generate the portraits first** — these become the references:
+   `weft art <game> --portraits`  → `assets/<pfp>.png`
+3. **Tag each scene** with `cast:` (the character ids on screen).
+4. **Generate scene art** — each scene is rendered *conditioned on the portraits of
+   its `cast`* (so they stay on-model) plus the style:
+   `weft art <game> --generate`
+
+The order is enforced: a scene naming a character whose portrait does not exist yet
+is **skipped** with `missing character reference … run --portraits first` — you
+cannot draw a character before locking their look. (Compile also rejects a `cast:`
+or `@speaker:` that names a character absent from `def.cast`.)
+
+### Anchors and opt-outs
+- `meta.art.anchor: "<scene>"` — a scene whose image is an extra *style* reference
+  for every other scene (and the source for extracting character portraits).
+- `ref: none` on a scene — generate it standalone, ignoring anchor + cast
+  conditioning. Use for splash/title/abstract art that shouldn't match scene style.
+
+### Commands
 ```
-`build` always refreshes SVG placeholders so a game looks intentional immediately; the
-engine prefers `assets/<name>.png` and falls back to `.svg`. Drop `OPENROUTER_API_KEY` into a
-`.env` (see `.env.example`) for real generation.
+weft art <game>                  # prompts.json + styled SVG placeholders (no API key)
+weft art <game> --portraits      # render character reference portraits (DO THIS FIRST)
+weft art <game> --generate       # render scenes, conditioned on the portraits
+weft art <game> --generate a b   # only those scene/portrait slots (cheap iteration)
+```
+`build` always refreshes SVG placeholders so a game looks intentional immediately;
+the engine prefers `assets/<name>.png` and falls back to `.svg`. Drop
+`OPENROUTER_API_KEY` into a `.env` (see `.env.example`) for real generation.
+Dialogue bubbles use the same `pfp` portraits (falling back to a colored disc).
+
 
 ## 10. Writing
 

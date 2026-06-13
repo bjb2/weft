@@ -21,14 +21,16 @@ async function collectSlots(gameDir) {
   const slots = {};
   for (const f of files) {
     const text = await readFile(join(srcDir, f), "utf8");
-    let scene = null, art = null, brief = null, firstProse = null, inAttrs = false;
-    const flush = () => { if (art) slots[art] = { brief: brief || firstProse || scene, scene }; art = brief = firstProse = null; };
+    let scene = null, art = null, brief = null, cast = null, ref = null, firstProse = null, inAttrs = false;
+    const flush = () => { if (art) slots[art] = { brief: brief || firstProse || scene, scene, cast: cast || [], ref }; art = brief = cast = ref = firstProse = null; };
     for (const raw of text.split(/\r?\n/)) {
       const t = raw.trim(); let m;
       if ((m = t.match(/^--- (\w+)/))) { flush(); scene = m[1]; inAttrs = true; continue; }
       if (!scene) continue;
       if (inAttrs && (m = t.match(/^art:\s*(\S+)$/))) { art = m[1]; continue; }
       if (inAttrs && (m = t.match(/^brief:\s*(.+)$/))) { brief = m[1].trim(); continue; }
+      if (inAttrs && (m = t.match(/^cast:\s*(.+)$/))) { cast = m[1].split(",").map((s) => s.trim()).filter(Boolean); continue; }
+      if (inAttrs && (m = t.match(/^ref:\s*(\S+)$/))) { ref = m[1]; continue; }
       if (/^(combat|win|lose|ending):/.test(t)) continue;
       if (t === "" || t.startsWith("* ") || t.startsWith("!! ") || t.startsWith(":: ") || t === "~~~" || /^\[\[/.test(t)) { if (t) inAttrs = false; continue; }
       inAttrs = false;
@@ -59,15 +61,43 @@ function placeholderSVG(name, palette, styleName) {
 </svg>
 `;
 }
+// Circular profile-picture placeholder for a cast member: a disc in the
+// character's accent (or the style accent) with their initial, on the UI bg.
+function avatarSVG(label, color, palette) {
+  const p = palette, bg = p["--bg2"] || "#141b2c", line = p["--line"] || "#242e45", fg = p["--bg"] || "#0a0d14";
+  const c = color || p["--accent"] || "#e8c15a";
+  const initial = esc((String(label).trim()[0] || "?").toUpperCase());
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+  <rect width="200" height="200" fill="${bg}"/>
+  <circle cx="100" cy="100" r="84" fill="${c}" stroke="${line}" stroke-width="3"/>
+  <text x="100" y="104" text-anchor="middle" dominant-baseline="central" font-family="Georgia, serif" font-size="96" fill="${fg}">${initial}</text>
+</svg>
+`;
+}
 
-export async function artGame(gameDir, { generate = false } = {}) {
+
+export async function artGame(gameDir, { generate = false, only = null, portraitsOnly = false } = {}) {
   const def = (await import(pathToFileURL(join(gameDir, "game.js")).href + "?t=" + Date.now())).default;
   const style = resolveStyle(def.meta?.art) || { descriptor: "", framing: "no text", palette: {} };
+  // Recurring-character descriptor appended to every scene prompt so the cast is
+  // drawn consistently; `meta.art.anchor` names a scene whose image is used as a
+  // visual reference (style + characters) when generating the others.
+  const castStr = def.meta?.art?.cast || "";
+  const anchor = def.meta?.art?.anchor || null;
   const slots = await collectSlots(gameDir);
   const names = Object.keys(slots);
 
   const prompts = {};
-  for (const name of names) prompts[name] = [slots[name].brief, style.descriptor, style.framing].filter(Boolean).join(". ");
+  for (const name of names) prompts[name] = [slots[name].brief, castStr, style.descriptor, style.framing].filter(Boolean).join(". ");
+  // Cast profile pictures: one portrait prompt + circular placeholder per unique
+  // pfp asset declared in def.cast. `brief` on a character describes the portrait.
+  const cast = def.cast || {};
+  const pfps = [];
+  for (const [id, ch] of Object.entries(cast)) {
+    if (!ch.pfp || pfps.some((x) => x.pfp === ch.pfp)) continue;
+    pfps.push({ pfp: ch.pfp, label: ch.name || id, color: ch.color });
+    prompts[ch.pfp] = [ch.brief || ch.name || id, "character profile portrait, head and shoulders, centered, plain background", style.descriptor, "no text"].filter(Boolean).join(". ");
+  }
   await mkdir(join(gameDir, "art"), { recursive: true });
   await writeFile(join(gameDir, "art", "prompts.json"), JSON.stringify(prompts, null, 2) + "\n");
 
@@ -80,20 +110,88 @@ export async function artGame(gameDir, { generate = false } = {}) {
     await writeFile(file, placeholderSVG(name, style.palette, def.meta?.art?.style));
     made++;
   }
+  for (const { pfp, label, color } of pfps) {
+    const file = join(gameDir, "assets", pfp + ".svg");
+    try { await readFile(file); if (!generate) continue; } catch {}
+    await writeFile(file, avatarSVG(label, color, style.palette));
+    made++;
+  }
 
-  // Optional: real PNGs via OpenRouter image model when a key is present.
-  if (generate && process.env.OPENROUTER_API_KEY) {
-    const model = process.env.OR_IMAGE_MODEL || "google/gemini-2.5-flash-image";
-    for (const name of names) {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST", headers: { Authorization: "Bearer " + process.env.OPENROUTER_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({ model, modalities: ["image", "text"], messages: [{ role: "user", content: prompts[name] }] }),
-      }).catch(() => null);
-      if (!res || !res.ok) continue;
-      const j = await res.json();
-      const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-      if (url?.startsWith("data:image")) await writeFile(join(gameDir, "assets", name + ".png"), Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
+  // Generate real PNGs via OpenRouter, in two ordered phases that keep characters
+  // on-model:
+  //   1. CHARACTER REFERENCES — each cast member's portrait, from their brief.
+  //   2. SCENES — each scene conditioned on the portrait(s) of the characters it
+  //      declares (scene `cast:` attr) plus the optional style anchor.
+  // A scene that names a character whose portrait does not exist yet is SKIPPED
+  // with a clear message — you must establish character references before drawing
+  // scenes that include them. This is what prevents per-image character drift.
+  let generated = 0, attempted = 0;
+  const failures = [];
+  if (generate) {
+    if (!process.env.OPENROUTER_API_KEY) {
+      failures.push({ name: "*", reason: "no OPENROUTER_API_KEY in env/.env" });
+    } else {
+      const model = process.env.OR_IMAGE_MODEL || "google/gemini-2.5-flash-image";
+      const portraitOf = {}; // cast id -> portrait asset name
+      for (const [id, ch] of Object.entries(cast)) if (ch.pfp) portraitOf[id] = ch.pfp;
+      const dataURL = async (n) => { try { return "data:image/png;base64," + (await readFile(join(gameDir, "assets", n + ".png"))).toString("base64"); } catch { return null; } };
+      const callImage = async (name, content) => {
+        try {
+          const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST", headers: { Authorization: "Bearer " + process.env.OPENROUTER_API_KEY, "Content-Type": "application/json" },
+            body: JSON.stringify({ model, modalities: ["image", "text"], messages: [{ role: "user", content }] }),
+          });
+          const j = await res.json().catch(() => ({}));
+          if (!res.ok) { failures.push({ name, reason: `HTTP ${res.status}${j.error?.message ? ": " + j.error.message : ""}` }); return; }
+          const url = j.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+          if (!url || !url.startsWith("data:image")) { failures.push({ name, reason: j.error?.message || "no image in response" }); return; }
+          await writeFile(join(gameDir, "assets", name + ".png"), Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
+          generated++;
+        } catch (e) { failures.push({ name, reason: e.message }); }
+      };
+      const anchorRef = anchor ? await dataURL(anchor) : null;
+      const CHAR_MATCH = " Use the EXACT character designs shown in the reference image(s) — keep every recurring character perfectly on-model; match the art style, palette and linework; only the scene and poses change.";
+      const STYLE_MATCH = " Match the visual style, palette, and linework of the reference image; change only the scene.";
+
+      // Phase 1 — character reference portraits (skipped when targeting scene slots).
+      if (portraitsOnly || !(only && only.length)) {
+        for (const p of pfps) {
+          if (only && only.length && !only.includes(p.pfp)) continue;
+          attempted++;
+          const content = anchorRef
+            ? [{ type: "text", text: prompts[p.pfp] + " The same character as in the reference image; isolate just this one character." }, { type: "image_url", image_url: { url: anchorRef } }]
+            : prompts[p.pfp];
+          await callImage(p.pfp, content);
+        }
+      }
+
+      // Phase 2 — scenes, conditioned on their characters' portraits.
+      if (!portraitsOnly) {
+        const targets = names.filter((n) => !only || !only.length || only.includes(n));
+        const ordered = anchor && targets.includes(anchor) ? [anchor, ...targets.filter((n) => n !== anchor)] : targets;
+        for (const name of ordered) {
+          attempted++;
+          // `ref: none` opts a scene out of all conditioning (splash/title/abstract
+          // art that should NOT match the scene anchor) — generate it standalone.
+          if (slots[name].ref === "none") { await callImage(name, prompts[name]); continue; }
+          const sceneCast = slots[name].cast || [];
+          const refs = [], missing = [];
+          for (const cid of sceneCast) {
+            const pf = portraitOf[cid];
+            if (!pf) { missing.push(cid + " (not in def.cast / no pfp)"); continue; }
+            const u = await dataURL(pf);
+            if (u) refs.push(u); else missing.push(cid);
+          }
+          if (missing.length) { failures.push({ name, reason: `missing character reference(s): ${missing.join(", ")} — run \`weft art <game> --portraits\` first` }); continue; }
+          if (anchorRef && name !== anchor) refs.push(anchorRef); // style backup
+          const content = refs.length
+            ? [{ type: "text", text: prompts[name] + (sceneCast.length ? CHAR_MATCH : STYLE_MATCH) }, ...refs.map((u) => ({ type: "image_url", image_url: { url: u } }))]
+            : prompts[name];
+          await callImage(name, content);
+        }
+      }
+      for (const n of (only || [])) if (!(n in prompts)) failures.push({ name: n, reason: "no such art slot (check art: names in scenes / cast)" });
     }
   }
-  return { slots: names.length, names, placeholders: made, style: def.meta?.art?.style || "(none)" };
+  return { slots: names.length, names, casts: pfps.length, placeholders: made, style: def.meta?.art?.style || "(none)", generated, attempted, failures };
 }

@@ -13,5 +13,12 @@ Thumbs.db
 .idea/
 .vscode/
 
-# generated PNGs from the art pipeline are large + reproducible; keep SVG placeholders.
-games/*/assets/*.png
+# weft editor runtime
+wfed.log
+wfed.pid
+
+# local scratch screenshots (ad-hoc hidden .png files at the repo root)
+/.*.png
+
+# NOTE: generated game art (games/*/assets/*.png) IS committed so the hosted
+# portal shows real illustrations. Regenerate with `weft art <game> --generate`.

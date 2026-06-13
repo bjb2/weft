@@ -11,14 +11,15 @@ safety + reference/typo checks), and tested (replay + fuzz) before it ships.
 ## Why it's structured this way
 
 - **Engine ⇄ content separation.** Nothing game-specific lives in the runtime. Stats, pools,
-  items, enemies, techniques, and systems all come from `game.js`. The same engine runs a
+  items, enemies, techniques, cast, and systems all come from `game.js`. The same engine runs a
   pure-text mystery and a stat-driven dungeon crawl.
 - **Deterministic by construction.** All randomness flows through a seeded PRNG stored in the
   save, so any playthrough can be recorded and replayed exactly — that's what powers the
   regression tests.
 - **Validation-first.** The compiler refuses dead-end scenes, unknown jump targets, undeclared
-  combat techniques, and — crucially for branching fiction — any variable that is *read but
-  never written* (the silent-typo bug). The audit then proves every scene is reachable.
+  combat techniques, undeclared dialogue speakers, and — crucially for branching fiction — any
+  variable that is *read but never written* (the silent-typo bug). The audit then proves every
+  scene is reachable.
 - **Self-contained output.** `build` bundles a game into one classic `<script>` that runs from
   `file://` and from any static host, with the build hash in the filename for cache-busting.
 

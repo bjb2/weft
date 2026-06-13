@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0a0d14">
+<title>weft</title>
+<meta name="description" content="a shelf of small, machine-checked interactive fictions">
+<style>
+:root{--bg:#0a0d14;--bg2:#121826;--panel:#141b2c;--ink:#cfd6e4;--dim:#7d889e;--accent:#e8c15a;--line:#242e45}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 600px at 50% -10%,#16203a 0%,var(--bg) 60%);color:var(--ink);
+ font:17px/1.6 Georgia,'Times New Roman',serif;-webkit-font-smoothing:antialiased}
+header{max-width:1040px;margin:0 auto;padding:64px 24px 8px;text-align:center}
+header h1{font-size:46px;font-weight:normal;letter-spacing:8px;text-transform:lowercase;color:var(--accent);margin:0}
+header p{color:var(--dim);font-style:italic;margin:10px 0 0;font-size:18px}
+header .rule{width:56px;height:2px;background:var(--accent);opacity:.5;margin:26px auto 0}
+main{max-width:1040px;margin:0 auto;padding:34px 24px 80px;
+ display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:22px}
+.card{display:flex;flex-direction:column;text-decoration:none;color:inherit;background:var(--panel);
+ border:1px solid var(--line);border-radius:10px;overflow:hidden;position:relative;
+ transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.card:hover{transform:translateY(-3px);border-color:var(--ac);box-shadow:0 14px 36px rgba(0,0,0,.45)}
+.card.unbuilt{opacity:.55;cursor:default}
+.thumb{position:relative;aspect-ratio:3/2;background:linear-gradient(135deg,var(--bg2),#0b0e16);overflow:hidden}
+.thumb .cover{width:100%;height:100%;object-fit:cover;display:block}
+.thumb .mono{display:none;position:absolute;inset:0;align-items:center;justify-content:center;
+ font:600 22px/1 ui-monospace,monospace;letter-spacing:4px;color:var(--ac);text-transform:uppercase;opacity:.7}
+.thumb.nocover .cover{display:none}.thumb.nocover .mono{display:flex}
+.thumb::after{content:"";position:absolute;left:0;right:0;bottom:0;height:4px;background:var(--ac);opacity:.9}
+.body{padding:16px 18px 18px}
+.body h2{margin:0;font-size:21px;font-weight:normal;letter-spacing:.4px;color:var(--ink)}
+.body p{margin:6px 0 0;color:var(--dim);font-size:15px;font-style:italic}
+.tags{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px}
+.tags span{font:12px/1 Georgia,serif;letter-spacing:.6px;color:var(--dim);
+ border:1px solid var(--line);border-radius:999px;padding:4px 9px}
+.badge{position:absolute;top:10px;right:10px;font:11px/1 ui-monospace,monospace;letter-spacing:1px;
+ color:var(--bg);background:var(--ac);border-radius:4px;padding:4px 7px;text-transform:uppercase}
+footer{max-width:1040px;margin:0 auto;padding:0 24px 64px;text-align:center;color:var(--dim);font-size:13px}
+footer code{color:var(--ink);font-family:ui-monospace,monospace}
+@media(max-width:560px){header{padding-top:44px}header h1{font-size:34px;letter-spacing:5px}}
+</style></head>
+<body>
+<header><h1>weft</h1><p>a shelf of small, machine-checked interactive fictions</p><div class="rule"></div></header>
+<main>
+<a class="card" style="--ac:#5ad6e8" href="games/crawl/index.html"><div class="thumb"><img class="cover" loading="lazy" alt="" src="games/crawl/assets/door.png" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='games/crawl/assets/door.svg';}else this.closest('.thumb').classList.add('nocover');"><span class="mono">crawl</span></div>
+      <div class="body"><h2>The Sunken Vault</h2><p>a dive into the drowned reliquary</p><div class="tags"><span>combat</span><span>inventory</span><span>skill checks</span><span>3 endings</span></div></div></a>
+<a class="card" style="--ac:#c0444c" href="games/lastcall/index.html"><div class="thumb"><img class="cover" loading="lazy" alt="" src="games/lastcall/assets/undertow.png" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='games/lastcall/assets/undertow.svg';}else this.closest('.thumb').classList.add('nocover');"><span class="mono">lastcall</span></div>
+      <div class="body"><h2>Last Call at the Undertow</h2><p>a closing-time conversation in four voices</p><div class="tags"><span>dialogue</span><span>inventory</span><span>skill checks</span><span>2 endings</span></div></div></a>
+<a class="card" style="--ac:#b08d57" href="games/mystery/index.html"><div class="thumb"><img class="cover" loading="lazy" alt="" src="games/mystery/assets/title.png" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='games/mystery/assets/title.svg';}else this.closest('.thumb').classList.add('nocover');"><span class="mono">mystery</span></div>
+      <div class="body"><h2>The Ashford Inheritance</h2><p>a Gothic mystery in one long night</p><div class="tags"><span>inventory</span><span>skill checks</span><span>3 endings</span></div></div></a>
+<a class="card" style="--ac:#ff5fa2" href="games/pfpd/index.html"><div class="thumb"><img class="cover" loading="lazy" alt="" src="games/pfpd/assets/title.png" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='games/pfpd/assets/title.svg';}else this.closest('.thumb').classList.add('nocover');"><span class="mono">pfpd</span></div>
+      <div class="body"><h2>PFP'd: Stuck in Meatspace</h2><p>a reverse-isekai about getting un-canceled, un-arrested, and back online</p><div class="tags"><span>dialogue</span><span>inventory</span><span>skill checks</span><span>4 endings</span></div></div></a>
+<a class="card" style="--ac:#e8c15a" href="games/sample/index.html"><div class="thumb"><img class="cover" loading="lazy" alt="" src="games/sample/assets/title.png" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='games/sample/assets/title.svg';}else this.closest('.thumb').classList.add('nocover');"><span class="mono">sample</span></div>
+      <div class="body"><h2>The Forking Path</h2><p>an interactive fiction</p><div class="tags"><span>skill checks</span></div></div></a>
+</main>
+<footer>5 games · built with the <code>weft</code> interactive-fiction engine</footer>
+</body></html>
