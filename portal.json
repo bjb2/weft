@@ -1,0 +1,15 @@
+{
+  "title": "weft",
+  "subtitle": "a small loom of branching stories",
+  "external": [
+    {
+      "id": "golden-thread",
+      "title": "The Golden Thread",
+      "subtitle": "a transmigration wuxia — five acts, nine endings",
+      "url": "https://bjb2.github.io/golden-thread/",
+      "cover": "https://bjb2.github.io/golden-thread/assets/og-card.png",
+      "accent": "#e8c15a",
+      "tags": ["wuxia", "combat", "5 acts", "9 endings", "the original"]
+    }
+  ]
+}

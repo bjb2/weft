@@ -712,6 +712,8 @@ const STYLE = `
 .weft #wf-foot{margin-top:40px;padding:14px 0 8px;border-top:1px solid #1a2236;text-align:center;font-size:12px}
 .weft #wf-foot button{font:inherit;font-size:12px;background:none;border:none;color:var(--dim);cursor:pointer;letter-spacing:.5px;padding:4px 10px}
 .weft #wf-foot button:hover{color:var(--ink)} .weft #wf-foot .danger{color:var(--bad)}
+.weft #wf-foot a{font:inherit;font-size:12px;color:var(--dim);text-decoration:none;letter-spacing:.5px;padding:4px 10px}
+.weft #wf-foot a:hover{color:var(--accent)}
 .weft .jbtn{margin-left:auto;cursor:pointer;color:var(--accent2);font-size:13px;letter-spacing:.5px}
 .weft .jbtn:hover{color:var(--accent)}
 .weft .panel h2{font-size:23px;color:var(--accent);font-weight:normal;letter-spacing:1px;margin:6px 0 0}
@@ -740,6 +742,9 @@ function injectStyle(theme) {
 function mount(game, opts = {}) {
   const root = opts.root || document.body;
   const assetPath = opts.assetPath ?? "assets/";
+  // Optional "back to portal" link shown in the footer. Deploy context only —
+  // the index.html sets window.__WEFT_HOME; standalone/editor previews omit it.
+  const home = opts.home || null;
   injectStyle(opts.theme || (game.def.meta && game.def.meta.theme));
   root.classList.add("weft");
   root.innerHTML = `<div id="wf-hud"></div><div id="wf-main"></div><div id="wf-foot"></div>`;
@@ -836,10 +841,12 @@ function mount(game, opts = {}) {
     window.scrollTo(0, 0);
   }
   function foot(v) {
-    if (v.scene === game.def.start && v.kind === "scene") { footEl.innerHTML = ""; return; }
-    footEl.innerHTML = `<button id="wf-rst">\u21BA restart</button>`;
+    const homeLink = home ? `<a id="wf-home" href="${home.href}">${home.label}</a>` : "";
+    const onStart = v.scene === game.def.start && v.kind === "scene";
+    if (onStart) { footEl.innerHTML = homeLink; return; }
+    footEl.innerHTML = homeLink + `<button id="wf-rst">\u21BA restart</button>`;
     footEl.querySelector("#wf-rst").onclick = () => {
-      footEl.innerHTML = `<span class="small">Erase progress and restart?</span> <button class="danger" id="wf-y">Yes</button> <button id="wf-n">No</button>`;
+      footEl.innerHTML = homeLink + `<span class="small">Erase progress and restart?</span> <button class="danger" id="wf-y">Yes</button> <button id="wf-n">No</button>`;
       footEl.querySelector("#wf-y").onclick = () => { game.clearSave(); game.start(Date.now()); render(); };
       footEl.querySelector("#wf-n").onclick = () => foot(v);
     };
@@ -980,6 +987,6 @@ var __THEME = {"--bg":"#12131c","--bg2":"#1d1f2e","--panel":"#181a26","--ink":"#
 var __game = createGame(__GAME_DEF, { scenes: scenes, enemies: __GAME_DEF.enemies || {}, storage: localStorageAdapter() });
 var __jump = new URLSearchParams(location.search).get("scene");
 if (__jump && scenes[__jump]) { __game.start(Date.now()); __game.goto(__jump); } else __game.resume(Date.now());
-mount(__game, { root: document.getElementById("game"), assetPath: "assets/", theme: __THEME });
+mount(__game, { root: document.getElementById("game"), assetPath: "assets/", theme: __THEME, home: (typeof window !== "undefined" && window.__WEFT_HOME) || null });
 window.__weft = __game;
 })();

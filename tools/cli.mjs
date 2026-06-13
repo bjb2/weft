@@ -31,8 +31,12 @@ const REPO = dirname(dirname(fileURLToPath(import.meta.url)));
 if (dir) loadEnv(join(dir, ".env"));
 loadEnv(join(REPO, ".env"));
 
+// In-repo games live at games/<id>/, so the portal is always two levels up. CLI
+// builds embed that "back to the shelf" link; the editor preview build omits it.
+const HOME = { href: "../../index.html", label: "\u2190 all games" };
+
 async function build(gameDir) {
-  const r = await buildGame(gameDir);
+  const r = await buildGame(gameDir, { home: HOME });
   ok(`compiled ${r.compiled.scenes} scenes, ${r.compiled.links} links, ${r.compiled.combats} combats`);
   ok(`art: ${r.art.slots} scene slots${r.art.casts ? ` + ${r.art.casts} character portraits` : ""} (${r.art.placeholders} placeholders), style ${r.art.style}`);
   ok(`bundled -> build/${r.bundleName}; wrote index.html`);
@@ -154,7 +158,7 @@ async function site() {
   ok(`\nSITE — building ${ids.length} game(s)`);
   let made = 0;
   for (const id of ids) {
-    try { const r = await buildGame(join(gamesDir, id)); ok(`  built ${id} (${r.compiled.scenes} scenes)`); made++; }
+    try { const r = await buildGame(join(gamesDir, id), { home: HOME }); ok(`  built ${id} (${r.compiled.scenes} scenes)`); made++; }
     catch (e) { ok(`  SKIP ${id}: ${e.errors ? e.errors.join("; ") : e.message}`); }
   }
   ok(`  built ${made}/${ids.length}`);

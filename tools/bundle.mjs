@@ -37,7 +37,7 @@ var __THEME = ${JSON.stringify(opts.theme || null)};
 var __game = createGame(__GAME_DEF, { scenes: scenes, enemies: __GAME_DEF.enemies || {}, storage: localStorageAdapter() });
 var __jump = new URLSearchParams(location.search).get("scene");
 if (__jump && scenes[__jump]) { __game.start(Date.now()); __game.goto(__jump); } else __game.resume(Date.now());
-mount(__game, { root: document.getElementById("game"), assetPath: "assets/", theme: __THEME });
+mount(__game, { root: document.getElementById("game"), assetPath: "assets/", theme: __THEME, home: (typeof window !== "undefined" && window.__WEFT_HOME) || null });
 window.__weft = __game;`);
 
   const code = '(function(){\n"use strict";\n' + parts.join("\n\n") + "\n})();\n";
