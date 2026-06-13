@@ -6,7 +6,7 @@ export default {
     title: "The Salt-Iron Bell",
     subtitle: "a wuxia errand at the edge of a dying sect",
     saveVersion: 1,
-    art: { style: "ink-wash" },
+    art: { style: "wuxia" },
   },
 
   start: "start",
@@ -32,9 +32,9 @@ export default {
   },
 
   cast: {
-    you: { name: "You", pfp: "you", self: true, color: "#e8c15a", brief: "a young road-worn courier in grey travelling clothes, ink-wash wuxia portrait" },
-    ren: { name: "Ren", pfp: "ren", color: "#7ea7d8", brief: "a lean gatekeeper monk leaning on a bamboo staff, ink-wash wuxia portrait" },
-    lou: { name: "Master Lou", pfp: "lou", color: "#e0606a", brief: "a frail blind sect master in faded saffron robes, ink-wash wuxia portrait" },
+    you: { name: "You", pfp: "you", self: true, color: "#e8c15a", brief: "a young road-worn courier in grey travelling clothes, wuxia character portrait" },
+    ren: { name: "Ren", pfp: "ren", color: "#7ea7d8", brief: "a lean gatekeeper monk leaning on a bamboo staff, wuxia character portrait" },
+    lou: { name: "Master Lou", pfp: "lou", color: "#e0606a", brief: "a frail blind sect master in faded saffron robes, wuxia character portrait" },
   },
 
   // Continuity registry: each character/place names the scene that introduces it.

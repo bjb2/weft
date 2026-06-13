@@ -35,6 +35,47 @@ PY="$COMFY/.venv/Scripts/python.exe"
 `build` prefers `assets/<name>.png` over the `.svg` placeholder, so generated art shows up
 automatically; the portal cards pick it up too.
 
+## Character consistency (`charstudio.py`)
+
+Keeping invented characters on-design across portraits and scenes, fully local,
+commercially clean (SD 3.5 community license), and with **no manual curation**.
+Three stages; the first two are proven and run from here over HTTP, the third
+(training) runs in your own terminal.
+
+**1. Bootstrap a training set from a text brief** — `--mode dataset`. Generates a
+deterministic hero (upper-body, plain background), then img2img-riffs it across a
+fixed expression/lighting sweep at low denoise. Low denoise locks identity, so
+every frame is on-model and no human pruning is needed. Captions are written
+deterministically (we authored the sweep, so each frame's view is known — no
+captioner). Output is a kohya-ready folder.
+```bash
+python tools/comfy/charstudio.py --mode dataset \
+  --brief "a lean gatekeeper monk with a shaved head and a bamboo staff" \
+  --token sb_ren --style "<the ink-wash descriptor>" \
+  --out games/saltbell/art/lora --n 24 --denoise 0.5
+```
+
+**2. Train a per-character LoRA** — see `lora-train.example.toml` (kohya sd-scripts
+`sd3` branch; needs the non-GGUF SD3.5 Medium weights). ~30-90 min/character on a
+3080. Produces `<token>.safetensors`.
+
+**3. Render with the LoRA** — single character: load its LoRA in a normal
+generation. **Multiple characters in one scene** — `--mode composite`: render the
+empty background, then inpaint each character into their own region in a separate
+pass with **only that character's LoRA loaded**. One identity active per pass is
+why a multi-character banner never bleeds features between characters.
+```bash
+python tools/comfy/charstudio.py --mode composite \
+  --bg "a stone temple courtyard at dusk, mist, lanterns" \
+  --briefs "Ren, a gatekeeper monk ..." "Master Lou, a blind sect master ..." \
+  --loras sb_ren sb_lou \
+  --style "<the ink-wash descriptor>" --out banner.png --w 1216 --h 832 --denoise 0.85
+```
+Regions are derived from cast count (1=center, 2=L/R, 3=thirds); masks are built
+from ComfyUI core nodes (no external mask files). Pass `-` in `--loras` (or omit)
+for a prompt-only character. Without trained LoRAs the compositing still works —
+each character is a fresh interpretation of its brief rather than the exact design.
+
 ## Gotchas (learned the hard way)
 - **Use a normal Python, NOT the Microsoft-Store Python.** The Store build
   (`...\WindowsApps\PythonSoftwareFoundation.Python...`) runs in a sandbox that breaks native

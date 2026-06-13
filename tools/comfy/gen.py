@@ -14,7 +14,17 @@ import argparse, json, os, time, urllib.request, urllib.parse, uuid, hashlib
 NEG = ("text, words, letters, watermark, signature, caption, logo, title, label, "
        "red seal, artist seal, stamp, calligraphy, chinese characters, japanese text, kanji, hanzi, "
        "border, frame, picture frame, "
-       "blurry, lowres, jpeg artifacts, deformed, extra limbs, bad anatomy, ugly")
+       "blurry, lowres, jpeg artifacts, deformed, extra limbs, bad anatomy, ugly, "
+       "bad hands, malformed hands, deformed hands, extra fingers, missing fingers, fused fingers, mangled hands")
+
+# Illustrious-XL (SDXL) path. SDXL responds to quality tags; keep a tight booru-ish
+# negative. Used by --model illustrious (the only path that can do IP-Adapter).
+SDXL_POS = "masterpiece, best quality, highly detailed, "
+SDXL_NEG = ("(text:1.3), (signature:1.4), (red seal:1.6), (artist seal:1.6), (stamp:1.5), (watermark:1.4), (logo:1.3), "
+       "english text, chinese text, japanese text, kanji, hanzi, letters, words, artist name, username, title, caption, label, calligraphy, web address, "
+       "lowres, worst quality, low quality, jpeg artifacts, blurry, "
+       "bad anatomy, bad hands, missing fingers, extra digits, deformed, extra limbs, ugly, "
+       "border, frame, picture frame, speech bubble")
 
 def workflow(prompt, neg, seed, w, h, steps=28, cfg=4.5):
     return {
@@ -31,6 +41,20 @@ def workflow(prompt, neg, seed, w, h, steps=28, cfg=4.5):
                  "seed": seed, "steps": steps, "cfg": cfg,
                  "sampler_name": "dpmpp_2m", "scheduler": "sgm_uniform", "denoise": 1.0}},
         "d":  {"class_type": "VAEDecode", "inputs": {"samples": ["k", 0], "vae": ["v", 0]}},
+        "s":  {"class_type": "SaveImage", "inputs": {"images": ["d", 0], "filename_prefix": "weft"}},
+    }
+
+def workflow_sdxl(prompt, neg, seed, w, h, steps=30, cfg=6.0):
+    return {
+        "m":  {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "Illustrious-XL-v1.0.safetensors"}},
+        "p":  {"class_type": "CLIPTextEncode", "inputs": {"clip": ["m", 1], "text": SDXL_POS + prompt}},
+        "n":  {"class_type": "CLIPTextEncode", "inputs": {"clip": ["m", 1], "text": neg}},
+        "l":  {"class_type": "EmptyLatentImage", "inputs": {"width": w, "height": h, "batch_size": 1}},
+        "k":  {"class_type": "KSampler", "inputs": {
+                 "model": ["m", 0], "positive": ["p", 0], "negative": ["n", 0], "latent_image": ["l", 0],
+                 "seed": seed, "steps": steps, "cfg": cfg,
+                 "sampler_name": "dpmpp_2m", "scheduler": "karras", "denoise": 1.0}},
+        "d":  {"class_type": "VAEDecode", "inputs": {"samples": ["k", 0], "vae": ["m", 2]}},
         "s":  {"class_type": "SaveImage", "inputs": {"images": ["d", 0], "filename_prefix": "weft"}},
     }
 
@@ -67,6 +91,8 @@ def main():
     ap.add_argument("--slots", nargs="*", default=[])
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--steps", type=int, default=28)
+    ap.add_argument("--model", choices=["sd35", "illustrious"], default="sd35")
+    ap.add_argument("--seed", type=int, default=None, help="override the deterministic per-slot seed (re-roll a slot)")
     a = ap.parse_args()
 
     prompts = json.load(open(os.path.join(a.game, "art", "prompts.json")))
@@ -98,7 +124,11 @@ def main():
             print(f"  SKIP {slot}: not in prompts.json"); continue
         out = os.path.join(a.game, "assets", slot + ".png")
         t0 = time.time()
-        pid = post(a.comfy, workflow(prompts[slot], NEG, seed_for(slot), w, h, a.steps), cid)
+        seed = a.seed if a.seed is not None else seed_for(slot)
+        wf = (workflow_sdxl(prompts[slot], SDXL_NEG, seed, w, h, a.steps)
+              if a.model == "illustrious" else
+              workflow(prompts[slot], NEG, seed, w, h, a.steps))
+        pid = post(a.comfy, wf, cid)
         res = wait(a.comfy, pid)
         imgs = []
         for node in res.get("outputs", {}).values():

@@ -8,7 +8,7 @@ export default {
     title: "The Thread-Keeper",
     subtitle: "a wuxia of the drowned monastery and the loom of names",
     saveVersion: 1,
-    art: { style: "ink-wash" },
+    art: { style: "wuxia" },
   },
 
   start: "ch1_road",
@@ -32,9 +32,9 @@ export default {
   },
 
   cast: {
-    you: { name: "Wei", pfp: "wei", self: true, color: "#e8c15a", brief: "a young woman disciple in mourning-grey, wet to the knee, ink-wash wuxia portrait" },
-    bo: { name: "Old Bo", pfp: "bo", color: "#7ea7d8", brief: "a weathered marsh ferryman with a long pole and a guilty stoop, ink-wash wuxia portrait" },
-    yue: { name: "Master Yue", pfp: "yue", color: "#e0606a", brief: "an ancient loom-keeper with thread-scarred hands and white eyes, ink-wash wuxia portrait" },
+    you: { name: "Wei", pfp: "wei", self: true, color: "#e8c15a", brief: "a young woman disciple in mourning-grey, wet to the knee, wuxia character portrait" },
+    bo: { name: "Old Bo", pfp: "bo", color: "#7ea7d8", brief: "a weathered old marsh ferryman with a long pole and a guilty stoop, wuxia character portrait" },
+    yue: { name: "Master Yue", pfp: "yue", color: "#e0606a", brief: "an ancient blind woman loom-keeper with thread-scarred hands and white eyes, wuxia character portrait" },
   },
 
   entities: {

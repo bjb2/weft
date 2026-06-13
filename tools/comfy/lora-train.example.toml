@@ -1,0 +1,51 @@
+# SD 3.5 Medium per-character LoRA — kohya sd-scripts dataset config.
+#
+# This trains the identity of ONE weft character from the dataset that
+# `charstudio.py --mode dataset` produced (hero + img2img variations + captions).
+# The resulting LoRA, loaded at render time, keeps that character on-design in
+# portraits and in multi-character scenes (one LoRA per inpaint region — see
+# README "Character consistency").
+#
+# Prerequisites (run in your own terminal — the harness can't drive GPU training):
+#   1. kohya sd-scripts, `sd3` branch:   https://github.com/kohya-ss/sd-scripts
+#        git clone -b sd3 https://github.com/kohya-ss/sd-scripts
+#      (OneTrainer also works and has a GUI.)
+#   2. The NON-GGUF SD 3.5 Medium weights + text encoders. Training needs real
+#      fp16/bf16 tensors, not the q8 GGUF we generate with:
+#        - sd3.5_medium.safetensors          (stabilityai/stable-diffusion-3.5-medium, gated)
+#        - clip_g.safetensors, clip_l.safetensors   (you already have these)
+#        - t5xxl_fp16.safetensors            (NOT fp8 — fp8 access-violates on Ampere)
+#
+# Train (one character; repeat per token, ~30-90 min each on a 3080):
+#   python sd3_train_network.py \
+#     --pretrained_model_name_or_path /models/sd3.5_medium.safetensors \
+#     --clip_l /models/clip/clip_l.safetensors \
+#     --clip_g /models/clip/clip_g.safetensors \
+#     --t5xxl /models/clip/t5xxl_fp16.safetensors \
+#     --dataset_config tools/comfy/lora-train.example.toml \
+#     --output_dir /models/loras --output_name sb_ren \
+#     --network_module networks.lora_sd3 --network_dim 32 --network_alpha 16 \
+#     --learning_rate 1e-4 --max_train_steps 1500 \
+#     --mixed_precision bf16 --sdpa --gradient_checkpointing --cache_latents \
+#     --save_model_as safetensors
+#
+# Then drop /models/loras/sb_ren.safetensors where ComfyUI sees it and render:
+#   python tools/comfy/charstudio.py --mode composite --bg "..." \
+#     --briefs "Ren ..." "Master Lou ..." --loras sb_ren sb_lou --out banner.png ...
+
+[general]
+resolution = 1024
+caption_extension = ".txt"
+keep_tokens = 1           # keep the trigger token (first comma-field) fixed
+flip_aug = false          # off: faces/asymmetry should not mirror
+shuffle_caption = true
+
+[[datasets]]
+batch_size = 2
+
+  [[datasets.subsets]]
+  # Point this at one character's charstudio output folder. num_repeats tunes
+  # how many times the (small) set is seen per epoch; 10 × ~25 frames ≈ 250
+  # images/epoch, so max_train_steps 1500 ≈ 6 epochs at batch_size 2.
+  image_dir = "games/saltbell/art/lora/sb_ren"
+  num_repeats = 10

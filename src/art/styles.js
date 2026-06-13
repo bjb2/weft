@@ -10,6 +10,14 @@ export const STYLES = {
     framing: "wide cinematic banner, lots of negative space, no text, no signature, no seal, no calligraphy, no border",
     palette: { "--bg": "#0a0d14", "--bg2": "#141b2c", "--panel": "#121826", "--ink": "#cfd6e4", "--dim": "#7d889e", "--accent": "#e8c15a", "--accent2": "#a8862e", "--good": "#58b890", "--bad": "#e0606a", "--cool": "#7ea7d8", "--line": "#242e45" },
   },
+  // Illustrious/SDXL-tuned wuxia. Same indigo/gold palette as ink-wash (UI is
+  // unchanged) but an anime-cel descriptor that an SDXL model renders cleanly,
+  // instead of the painterly SD3.5 wording that Illustrious turns sketchy.
+  wuxia: {
+    descriptor: "anime wuxia illustration, ancient chinese xianxia setting, flowing hanfu robes, soft painterly cel shading, cinematic lighting, deep moonlit indigo-blue palette with warm metallic-gold accents, atmospheric mist, detailed and elegant",
+    framing: "cinematic key visual, atmospheric composition, no text, no signature, no watermark, no title, no logo, no seal, no calligraphy, no border",
+    palette: { "--bg": "#0a0d14", "--bg2": "#141b2c", "--panel": "#121826", "--ink": "#cfd6e4", "--dim": "#7d889e", "--accent": "#e8c15a", "--accent2": "#a8862e", "--good": "#58b890", "--bad": "#e0606a", "--cool": "#7ea7d8", "--line": "#242e45" },
+  },
   noir: {
     descriptor: "high-contrast black-and-white film-noir illustration, deep shadows and hard key light, rain and smoke, 1940s detective mood, a single desaturated crimson accent",
     framing: "cinematic 2.39:1 frame, dramatic chiaroscuro, no text",
