@@ -1,0 +1,16 @@
+{
+  "name": "weft",
+  "version": "0.1.0",
+  "description": "A data-driven interactive-fiction engine: declarative game definitions, a scene DSL, generic systems (combat/inventory/equipment/checks), and a headless test harness. Authorable by hand or by an LLM from a prompt.",
+  "type": "module",
+  "bin": {
+    "weft": "tools/cli.mjs"
+  },
+  "scripts": {
+    "build": "node tools/cli.mjs build",
+    "audit": "node tools/cli.mjs audit",
+    "test": "node tools/cli.mjs test",
+    "play": "node tools/cli.mjs play"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,4 @@
+[
+  { "name": "high road ending", "seed": 1, "script": ["c0", "c0"], "expect": { "scene": "end_high", "ending": true } },
+  { "name": "low road ending", "seed": 1, "script": ["c1", "c0"], "expect": { "scene": "end_low", "ending": true } }
+]

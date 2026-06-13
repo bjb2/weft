@@ -1,0 +1,17 @@
+# secrets
+.env
+.env.local
+
+# node
+node_modules/
+npm-debug.log*
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# generated PNGs from the art pipeline are large + reproducible; keep SVG placeholders.
+games/*/assets/*.png

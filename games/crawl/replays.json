@@ -1,0 +1,8 @@
+[
+  { "name": "beat the Warden (boss victory)", "seed": 1,
+    "script": ["c0", "c0", "c0", "c1", "c0", "c2", "c0", "c0", "strike", "strike", "c0", "c0", "c0", "cut", "snare", "strike", "guard", "rend", "strike"],
+    "expect": { "scene": "victory", "ending": true } },
+  { "name": "clear the Sentinel, then flee (escape ending)", "seed": 1,
+    "script": ["c1", "c0", "c0", "strike", "strike", "c2"],
+    "expect": { "scene": "escape", "ending": true } }
+]
