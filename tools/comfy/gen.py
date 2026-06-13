@@ -11,7 +11,10 @@ No third-party deps (urllib/json only). Requires a ComfyUI server at --comfy.
 """
 import argparse, json, os, time, urllib.request, urllib.parse, uuid, hashlib
 
-NEG = "text, words, letters, watermark, signature, caption, logo, blurry, lowres, jpeg artifacts, deformed, extra limbs, bad anatomy, ugly"
+NEG = ("text, words, letters, watermark, signature, caption, logo, title, label, "
+       "red seal, artist seal, stamp, calligraphy, chinese characters, japanese text, kanji, hanzi, "
+       "border, frame, picture frame, "
+       "blurry, lowres, jpeg artifacts, deformed, extra limbs, bad anatomy, ugly")
 
 def workflow(prompt, neg, seed, w, h, steps=28, cfg=4.5):
     return {

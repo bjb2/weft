@@ -6,8 +6,8 @@
 
 export const STYLES = {
   "ink-wash": {
-    descriptor: "Chinese ink-wash (shuimo) painting on deep indigo night paper, minimal and atmospheric, cool moonlit blues with a single warm metallic-gold accent, wuxia fantasy",
-    framing: "wide cinematic banner, lots of negative space, no text",
+    descriptor: "atmospheric cinematic wuxia illustration with soft ink-wash texture and misty depth, deep moonlit indigo-blue palette with a single warm metallic-gold accent, painterly digital concept art, evocative and minimal",
+    framing: "wide cinematic banner, lots of negative space, no text, no signature, no seal, no calligraphy, no border",
     palette: { "--bg": "#0a0d14", "--bg2": "#141b2c", "--panel": "#121826", "--ink": "#cfd6e4", "--dim": "#7d889e", "--accent": "#e8c15a", "--accent2": "#a8862e", "--good": "#58b890", "--bad": "#e0606a", "--cool": "#7ea7d8", "--line": "#242e45" },
   },
   noir: {

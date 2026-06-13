@@ -31,7 +31,7 @@ async function collectSlots(gameDir) {
       if (inAttrs && (m = t.match(/^brief:\s*(.+)$/))) { brief = m[1].trim(); continue; }
       if (inAttrs && (m = t.match(/^cast:\s*(.+)$/))) { cast = m[1].split(",").map((s) => s.trim()).filter(Boolean); continue; }
       if (inAttrs && (m = t.match(/^ref:\s*(\S+)$/))) { ref = m[1]; continue; }
-      if (/^(combat|win|lose|ending):/.test(t)) continue;
+      if (/^(combat|win|lose|ending|budget|beat):/.test(t)) continue;
       if (t === "" || t.startsWith("* ") || t.startsWith("!! ") || t.startsWith(":: ") || t === "~~~" || /^\[\[/.test(t)) { if (t) inAttrs = false; continue; }
       inAttrs = false;
       if (!firstProse) firstProse = t.replace(/\$\{[^}]*\}/g, "").replace(/<[^>]+>/g, "").split(/(?<=[.!?])\s/)[0].slice(0, 160);
