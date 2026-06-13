@@ -645,6 +645,20 @@ const STYLE = `
 .weft #wf-hud b{color:var(--accent);font-weight:normal}
 .weft .bar{height:4px;background:#1d2435;border-radius:2px;margin-top:6px;overflow:hidden}
 .weft .bar i{display:block;height:100%;background:var(--accent2);transition:width .3s}
+.weft #wf-hud .pools{display:flex;flex-wrap:wrap;gap:8px 16px;margin-bottom:8px}
+.weft #wf-hud .pool{flex:1 1 130px;min-width:108px;max-width:230px}
+.weft #wf-hud .prow{display:flex;justify-content:space-between;align-items:baseline}
+.weft #wf-hud .plabel{color:var(--dim);text-transform:uppercase;font-size:11px;letter-spacing:1px}
+.weft #wf-hud .pnum{color:var(--ink);font-size:14px;font-variant-numeric:tabular-nums}
+.weft #wf-hud .pbar{height:7px;background:#10141f;border:1px solid var(--line);border-radius:4px;overflow:hidden;margin-top:3px}
+.weft #wf-hud .pbar i{display:block;height:100%;border-radius:3px;transition:width .35s ease}
+.weft #wf-hud .pool.low .pnum{color:var(--bad)}
+.weft #wf-hud .pools.in-combat{gap:10px 18px;margin-bottom:10px}
+.weft #wf-hud .pools.in-combat .pool{flex:1 1 200px;max-width:none}
+.weft #wf-hud .pools.in-combat .pbar{height:12px}
+.weft #wf-hud .pools.in-combat .pnum{font-size:17px}
+.weft #wf-hud .pools.in-combat .plabel{font-size:12px}
+.weft #wf-hud .stats{font-size:13px;color:var(--dim)}
 .weft h1{font-size:34px;color:var(--accent);font-weight:normal;letter-spacing:2px;text-align:center;margin:50px 0 4px}
 .weft h2{font-size:15px;color:var(--dim);font-weight:normal;text-align:center;letter-spacing:4px;text-transform:uppercase;margin:0 0 36px}
 .weft #wf-main p{margin:0 0 14px}
@@ -717,7 +731,7 @@ function mount(game, opts = {}) {
     const v = game.view();
     // HUD
     if (v.scene === game.def.start && v.kind === "scene") hudEl.style.display = "none";
-    else { hudEl.style.display = "block"; hudEl.innerHTML = hud(v.hud); }
+    else { hudEl.style.display = "block"; hudEl.innerHTML = hud(v.hud, v.kind); }
 
     if (v.kind === "combat") {
       const pct = 100 * v.enemy.hp / v.enemy.max;
@@ -746,13 +760,21 @@ function mount(game, opts = {}) {
 
   const SECTION_LABELS = { stats: "Attributes", pools: "Condition", bonds: "Bonds", abilities: "Skills", inventory: "Carried", equipment: "Equipped", chronicle: "The story so far" };
   const surfaces = () => (game.def.surfaces && typeof game.def.surfaces === "object") ? game.def.surfaces : null;
-  function hud(h) {
+  function hud(h, kind) {
+    const cb = (game.def.systems && game.def.systems.combat) || {};
+    const hpName = cb.hpPool || "hp", resName = cb.resource;
+    const color = (k) => k === hpName ? "var(--bad)" : (k === resName ? "var(--cool)" : "var(--accent2)");
+    const pools = Object.entries(h.pools).map(([k, p]) => {
+      const pct = p.max ? Math.max(0, Math.min(100, 100 * p.cur / p.max)) : 0;
+      const low = k === hpName && pct <= 33 ? " low" : "";
+      return `<div class="pool${low}"><div class="prow"><span class="plabel">${cap(k)}</span><span class="pnum">${p.cur}/${p.max}</span></div><div class="pbar"><i style="width:${pct}%;background:${color(k)}"></i></div></div>`;
+    }).join("");
     const stats = Object.entries(h.stats).map(([k, val]) => `${cap(k)} ${val}`).join(" \u00b7 ");
-    const pools = Object.entries(h.pools).map(([k, p]) => `<span>${cap(k)} ${p.cur}/${p.max}</span>`).join("");
     const bonds = Object.entries(h.bonds).filter(([, n]) => n > 0).map(([k, n]) => `${cap(k)} ${n}`).join(" \u00b7 ");
     const panels = surfaces() ? Object.entries(surfaces()).map(([key, cfg]) =>
       `<span class="jbtn" data-panel="${key}">\u2766 ${cfg.title || cap(key)}</span>`).join("") : "";
-    return `<div class="row">${pools}<span>${stats}</span>${bonds ? `<span>${bonds}</span>` : ""}${panels}</div>`;
+    return `<div class="pools ${kind === "combat" ? "in-combat" : ""}">${pools}</div>` +
+      `<div class="row stats"><span>${stats}</span>${bonds ? `<span>${bonds}</span>` : ""}${panels}</div>`;
   }
   function wireHud() {
     hudEl.querySelectorAll(".jbtn[data-panel]").forEach((b) => { b.onclick = () => openPanel(b.dataset.panel); });
