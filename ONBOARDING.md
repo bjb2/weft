@@ -73,6 +73,9 @@ A game is finished only when **all** of the following hold — verify, do not as
 - **Tests:** every replay PASSES; fuzz shows **100% coverage**, **0 softlocks**, **0 errors**,
   and **every ending appears** in the fuzz histogram.
 - **Lint:** 0 errors; warnings reviewed and justified (`lint --warn` for the strict pass).
+- **Continuity** (if `entities` declared): 0 referenced-before-introduced errors.
+- **Length** (if a `length` budget is declared): 0 scenes under budget; corpus at/above
+  target. Use `weft expand` to drive each under-budget node to its word count, then re-check.
 - Each ending has a replay spec. Each gated path is reachable in the fuzz histogram.
 
 ## Why this is LLM-friendly

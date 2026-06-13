@@ -1,0 +1,5 @@
+[
+  { "name": "deliver sealed", "seed": 1, "script": ["c0", "c0", "c0", "c0"], "expect": { "scene": "end_deliver", "ending": true } },
+  { "name": "read it first", "seed": 1, "script": ["c0", "c0", "c0", "c1"], "expect": { "scene": "end_read", "ending": true } },
+  { "name": "burn it", "seed": 1, "script": ["c0", "c0", "c0", "c2"], "expect": { "scene": "end_burn", "ending": true } }
+]

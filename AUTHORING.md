@@ -281,7 +281,10 @@ node tools/cli.mjs new   games/<id> <id> "Title"   # scaffold a fresh, passing g
 node tools/cli.mjs build games/<id>                # compile + write index.html
 node tools/cli.mjs audit games/<id>                # reachability + safety + typo checks
 node tools/cli.mjs test  games/<id>                # replays + fuzz
-node tools/cli.mjs all   games/<id>                # build + audit + test
+node tools/cli.mjs all   games/<id>                # build + audit + lint + continuity + length + test
+node tools/cli.mjs length     games/<id>           # per-scene word budgets + corpus progress
+node tools/cli.mjs continuity games/<id>           # entity referenced-before-introduced check
+node tools/cli.mjs expand     games/<id>           # next under-budget node + its generation prompt
 node tools/cli.mjs play  games/<id> [seed]         # play in the terminal
 ```
 Open `games/<id>/index.html` in a browser to play with the DOM renderer. Append
@@ -386,3 +389,69 @@ Dialogue bubbles use the same `pfp` portraits (falling back to a colored disc).
 Prose quality is part of the build. See **[WRITING.md](./WRITING.md)** — `weft all` runs the
 prose linter and **fails on hard violations** (cliché bans, em-dash/antithesis ceilings).
 Tune per game with `games/<id>/writing.js`.
+
+---
+
+## 11. Length budgets & the expand loop (for long-form / AI-authored books)
+
+Branching books written by an LLM reliably come in **far short** of their target,
+because the model satisfies *structure* (every scene exists, every ending reachable)
+long before it satisfies *volume*. weft makes length a machine-checked invariant, the
+same way it checks reachability. Opt in with a top-level `length` block:
+
+```js
+length: {
+  corpus: 200000,      // total authored-word TARGET (reported as progress)
+  perScene: 600,       // default minimum NARRATIVE words per scene
+  tolerance: 0.12,     // a scene may come in this fraction under before it FAILS
+  enforceCorpus: false // also hard-fail the grand total against `corpus`
+},
+```
+
+Per-scene overrides live in the DSL as attributes (alongside `art:`):
+
+```
+--- ch3_flood
+budget: 320                  # this scene must reach ~320 narrative words (0 = exempt: hubs/endings)
+beat: the dam fails again; Bo has gone to repeat his arithmetic; lay the three threads bare
+```
+
+"Narrative words" = prose paragraphs + dialogue + system boxes (choice labels are
+counted separately, so a choice-heavy hub cannot pad its way to budget). `weft length`
+reports per-scene/per-chapter/corpus totals and **fails on any scene under budget** —
+a precise, fixable deficit per node, the feedback loop an LLM converges against.
+Total length is then `nodes x budget`, by construction: 200K = e.g. 40 chapters x 5K.
+
+**The expand loop.** `weft expand <game>` walks the scenes, finds the next under-budget
+node, and emits a ready-to-use **generation prompt** assembled from the story bible, the
+node's `beat`, its inbound routes, and the choices it must set up. Feed that to any model
+(or write it yourself), drop the prose in, re-run `weft length`. Because each node is
+bounded and validated independently, the loop is **resumable** — only under-budget nodes
+ever come back. A `bible.md` (or `story/bible.md`) at the game root is included in every
+prompt so chapter 40 is written with chapter 2's fidelity instead of thinning out.
+
+---
+
+## 12. Entities & continuity
+
+The narrative analogue of the variable-typo guard: declare your cast/places/lore in a
+top-level `entities` registry, naming the scene that introduces each, and weft proves —
+across **every** branching path — that nothing is referenced before it is introduced.
+
+```js
+entities: {
+  characters: {
+    yue: { name: "Master Yue", aliases: ["Yue"], first: "ch1_hall" }, // introduced here
+  },
+  places: { monastery: { name: "the Drowned Monastery", aliases: ["the monastery"], first: "ch1_road" } },
+  lore:   { loom: { name: "the Loom of Names", aliases: ["the loom"] } }, // no `first` => not position-checked
+},
+```
+
+`weft continuity` scans each scene's prose for an entity's name or aliases and, for any
+entity with a `first`, **fails** if a mention is reachable from `start` on a path that
+skips the introduction scene (e.g. a side-route that name-drops a character you have not
+met yet). It also warns about entities declared but never used. This is a real
+branching-fiction bug that is almost impossible to catch by hand once a book has dozens of
+routes. (`entities` is the continuity registry; `cast` remains the dialogue/portrait
+registry — a character that both speaks and is continuity-tracked appears in both.)

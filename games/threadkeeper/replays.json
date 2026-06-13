@@ -1,0 +1,5 @@
+[
+  { "name": "cut the thread", "seed": 1, "script": ["c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0"], "expect": { "scene": "ch3_end_cut", "ending": true } },
+  { "name": "mend the thread", "seed": 1, "script": ["c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c1"], "expect": { "scene": "ch3_end_mend", "ending": true } },
+  { "name": "leave the loom", "seed": 1, "script": ["c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c0", "c2"], "expect": { "scene": "ch3_end_let", "ending": true } }
+]

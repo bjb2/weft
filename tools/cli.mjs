@@ -9,6 +9,9 @@ import { lintGame } from "./prose-lint.mjs";
 import { artGame } from "./art.mjs";
 import { startEditor } from "./editor.mjs";
 import { buildPortal } from "./portal.mjs";
+import { lengthReport } from "./length.mjs";
+import { continuityReport } from "./continuity.mjs";
+import { expandPlan } from "./expand.mjs";
 import { loadEnv } from "./env.mjs";
 import { fileURLToPath } from "node:url";
 import { createGame } from "../src/engine.js";
@@ -66,6 +69,43 @@ async function test(gameDir) {
   if (f.never.length) ok(`  never visited: ${f.never.join(", ")}`);
   if (!r.pass) die("tests failed");
   ok("  tests OK");
+}
+
+async function length(gameDir, { gate = false } = {}) {
+  const r = await lengthReport(gameDir);
+  if (!r.enabled) { if (!gate) ok(`\nLENGTH ${relative(process.cwd(), gameDir)} — no length budget configured (skip)`); return; }
+  ok(`\nLENGTH ${relative(process.cwd(), gameDir)} — ${r.total} narrative words` + (r.corpus ? ` · ${r.pct}% of ${r.corpus} target (budgets sum to ${r.budgetSum})` : ""));
+  for (const [ch, c] of Object.entries(r.byChapter)) ok(`  ${ch}: ${c.words}/${c.budget} words · ${c.scenes} scenes`);
+  if (r.under.length) {
+    ok(`  UNDER BUDGET:`);
+    for (const s of r.under) ok(`    ${s.chapter}:${s.id}  ${s.words}/${s.budget} (min ${s.min})${s.beat ? "  — beat: " + s.beat : ""}`);
+  }
+  if (r.enforceCorpus && !r.corpusOk) ok(`  corpus under target: ${r.total}/${r.corpus}`);
+  if (!r.pass) { if (gate || cmd === "length") die(`  length failed: ${r.under.length} scene(s) under budget`); }
+  else ok("  length OK");
+}
+
+async function continuity(gameDir, { gate = false } = {}) {
+  const r = await continuityReport(gameDir);
+  if (!r.enabled) { if (!gate) ok(`\nCONTINUITY ${relative(process.cwd(), gameDir)} — no entities declared (skip)`); return; }
+  ok(`\nCONTINUITY ${relative(process.cwd(), gameDir)} — ${r.entities} entities tracked`);
+  for (const w of r.warns) ok(`  WARN  ${w}`);
+  for (const e of r.errors) console.error(`  ERROR ${e}`);
+  if (r.errors.length) { if (gate || cmd === "continuity") die(`  continuity failed: ${r.errors.length} problem(s)`); }
+  else ok("  continuity OK");
+}
+
+async function expand(gameDir) {
+  const plan = await expandPlan(gameDir);
+  ok(`\nEXPAND ${relative(process.cwd(), gameDir)} — ${plan.pending.length} node(s) need words` +
+    (plan.corpus ? ` · ${plan.pct}% of ${plan.corpus} (${plan.total}/${plan.corpus})` : ""));
+  if (!plan.pending.length) { ok("  nothing pending — every node meets its budget."); return; }
+  const next = plan.pending[0];
+  ok(`  next: ${next.chapter}:${next.id}  (${next.words}/${next.budget} words, need +${next.deficit})`);
+  ok("  ---- generation prompt ----");
+  ok(next.prompt);
+  ok("  ---------------------------");
+  if (plan.pending.length > 1) ok(`  then: ${plan.pending.slice(1).map((p) => p.id).join(", ")}`);
 }
 
 async function play(gameDir) {
@@ -172,9 +212,12 @@ async function site() {
     case "test": need(); await build(dir); await test(dir); break;
     case "lint": need(); await lint(dir); break;
     case "art": need(); await art(dir); break;
+    case "length": need(); await build(dir); await length(dir); break;
+    case "continuity": need(); await build(dir); await continuity(dir); break;
+    case "expand": need(); await build(dir).catch(() => {}); await expand(dir); break;
     case "play": need(); await build(dir); await play(dir); break;
     case "edit": need(); await edit(dir); break;
-    case "all": need(); await build(dir); await audit(dir); await lint(dir, { gate: true }); await test(dir); break;
+    case "all": need(); await build(dir); await audit(dir); await lint(dir, { gate: true }); await continuity(dir, { gate: true }); await length(dir, { gate: true }); await test(dir); break;
     case "new": {
       need(); const id = rest[1] || dir.split(/[\\/]/).pop(); const title = rest[2] || id;
       await scaffold(dir, id, title); ok(`scaffolded ${id} at ${relative(process.cwd(), dir)}`);
@@ -182,6 +225,6 @@ async function site() {
     }
     case "portal": await portal(); break;
     case "site": await site(); break;
-    default: die("usage: weft <build|audit|test|lint|art|play|edit|all|new> <gameDir> | <portal|site>  [--warn|--generate|--port=N]");
+    default: die("usage: weft <build|audit|test|lint|art|length|continuity|expand|play|edit|all|new> <gameDir> | <portal|site>  [--warn|--generate|--port=N]");
   }
 })().catch((e) => die(e.stack || e.message));

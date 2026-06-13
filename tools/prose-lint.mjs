@@ -19,8 +19,11 @@ import {
 
 const strip = (s) => s.replace(/\$\{[^}]*\}/g, "").replace(/<[^>]+>/g, "");
 
-// Pull {file, ln, text, scene, sys} records of visible prose from one .dsl file.
-function records(file, body) {
+// Pull {file, ln, text, scene, sys, label} records of visible prose from one .dsl
+// file. Shared by the linter and the length gate so "visible prose" has ONE
+// definition. `sys` = !! box, `label` = choice label; everything else is a
+// narrative paragraph or a dialogue line (speaker tag stripped).
+export function records(file, body) {
   const recs = [];
   let scene = null, inChoices = false, raw = false;
   body.split(/\r?\n/).forEach((line, idx) => {
@@ -28,7 +31,7 @@ function records(file, body) {
     let m;
     if ((m = t.match(/^--- (\w+)( \[raw\])?$/))) { scene = m[1]; raw = !!m[2]; inChoices = false; return; }
     if (!scene || raw) return;
-    if (/^(art|combat|win|lose|ending|brief):/.test(t)) return;
+    if (/^(art|combat|win|lose|ending|brief|budget|beat|cast|ref):/.test(t)) return;
     if (/^(req|do|hide|go):/.test(t)) return;          // choice code
     if (t === "" || t === "~~~" || /^\[\[(if|else|end)/.test(t)) return;
     if (t.startsWith(":: ")) return;                    // raw html line

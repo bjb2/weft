@@ -92,8 +92,8 @@ function parseFile(text, file) {
     const t = raw.trim(); let m;
     if ((m = t.match(/^--- (\w+)( \[raw\])?$/))) { cur = { id: m[1], raw: !!m[2], attrs: {}, body: [], choices: [], inAttrs: true }; scenes.push(cur); inChoices = false; continue; }
     if (!cur) { if (t && !t.startsWith("#")) throw new Error(`${file}: content before first scene: ${t}`); continue; }
-    if (cur.inAttrs && (m = t.match(/^(art|combat|win|lose|ending):\s*(\S+)$/))) { cur.attrs[m[1]] = m[2]; continue; }
-    if (cur.inAttrs && /^brief:\s*/.test(t)) continue; // art-production metadata (used by tools/art.mjs), not prose
+    if (cur.inAttrs && (m = t.match(/^(art|combat|win|lose|ending|budget):\s*(\S+)$/))) { cur.attrs[m[1]] = m[2]; continue; }
+    if (cur.inAttrs && /^(brief|beat):\s*/.test(t)) continue; // authoring metadata (art brief / outline beat), not prose
     if (cur.inAttrs && (m = t.match(/^cast:\s*(.+)$/))) { cur.castRefs = m[1].split(",").map((s) => s.trim()).filter(Boolean); continue; } // scene's on-screen characters (art references)
     if (cur.inAttrs && /^ref:\s*/.test(t)) continue; // art-generation conditioning hint (used by tools/art.mjs), not prose
     cur.inAttrs = false;
