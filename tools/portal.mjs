@@ -55,10 +55,10 @@ function coverImg(src, svgSrc) {
   return `<img class="cover" loading="lazy" alt="" src="${src}" onerror="${onerr}">`;
 }
 
-async function collectGames(gamesDir) {
+async function collectGames(gamesDir, exclude = new Set()) {
   const names = (await readdir(gamesDir, { withFileTypes: true }))
     .filter((d) => d.isDirectory() && !d.name.startsWith("_") && !d.name.startsWith("."))
-    .map((d) => d.name).sort();
+    .map((d) => d.name).filter((n) => !exclude.has(n)).sort();
   const cards = [];
   for (const id of names) {
     const gameDir = join(gamesDir, id);
@@ -173,7 +173,8 @@ export async function buildPortal(repoRoot, opts = {}) {
   const title = opts.title || cfg.title || "weft";
   const subtitle = opts.subtitle || cfg.subtitle || "a shelf of small, machine-checked interactive fictions";
 
-  const games = await collectGames(join(repoRoot, "games"));
+  const exclude = new Set(Array.isArray(cfg.exclude) ? cfg.exclude : []);
+  const games = await collectGames(join(repoRoot, "games"), exclude);
   const externals = externalCards(cfg.external);
   const cards = [...games, ...externals];
 

@@ -1,6 +1,7 @@
 {
   "title": "weft",
   "subtitle": "a small loom of branching stories",
+  "exclude": ["sample", "mystery"],
   "external": [
     {
       "id": "golden-thread",
