@@ -1,0 +1,25 @@
+[
+  { "name": "despair — the cage wins", "seed": 1,
+    "script": ["c0", "c0", "c0", "c10", "c10", "c11"],
+    "expect": { "scene": "end_despair", "ending": true } },
+
+  { "name": "taken — the Office collects you", "seed": 6,
+    "script": ["c0", "c0", "c0", "c3", "c1", "c7", "c0"],
+    "expect": { "scene": "end_taken", "ending": true } },
+
+  { "name": "exile with a purpose", "seed": 1,
+    "script": ["c0", "c1", "c4", "c0", "c2", "c1", "c0", "c8", "c1", "c0", "c9", "c1"],
+    "expect": { "scene": "end_exile", "ending": true } },
+
+  { "name": "the quiet hybrid life", "seed": 1,
+    "script": ["c0", "c1", "c4", "c0", "c2", "c1", "c0", "c8", "c1", "c0", "c9", "c2"],
+    "expect": { "scene": "end_hybrid", "ending": true } },
+
+  { "name": "the bittersweet way home", "seed": 1,
+    "script": ["c0", "c1", "c4", "c0", "c2", "c0", "c0", "c0", "c8", "c0", "c0", "c9", "c0", "c0"],
+    "expect": { "scene": "end_home", "ending": true } },
+
+  { "name": "the rift won't reopen (exile via failure)", "seed": 1,
+    "script": ["c0", "c1", "c4", "c0", "c8", "c1", "c0", "c9", "c0", "c0", "c0"],
+    "expect": { "scene": "end_exile", "ending": true } }
+]
