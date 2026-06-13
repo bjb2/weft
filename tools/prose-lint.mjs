@@ -33,6 +33,7 @@ function records(file, body) {
     if (t === "" || t === "~~~" || /^\[\[(if|else|end)/.test(t)) return;
     if (t.startsWith(":: ")) return;                    // raw html line
     if (t.startsWith("!! ")) { recs.push({ file, ln, scene, text: strip(t.slice(3)), sys: true }); return; }
+    if ((m = t.match(/^@[\w$]+:\s?(.*)$/))) { recs.push({ file, ln, scene, text: strip(m[1]) }); return; }  // dialogue line: lint the spoken text, not the speaker tag
     if ((m = t.match(/^\* (.+?)(?:\s*->\s*\w+)?$/))) { recs.push({ file, ln, scene, text: strip(m[1]), label: true }); inChoices = true; return; }
     if (inChoices) return;                              // indented choice attrs handled above
     recs.push({ file, ln, scene, text: strip(t) });
@@ -71,7 +72,7 @@ export async function lintGame(gameDir, { strict = false } = {}) {
       tricolon += count(text, TRICOLON);
       hedge += count(text, HEDGE);
       advtag += count(text, ADVERB_TAG);
-      if (rules.thesis && rules.thesis.test(text)) warn(file, r.ln, `stated-moral / thesis closer  «${text.slice(0, 64)}»`);
+      { const tm = rules.thesis && text.match(rules.thesis); if (tm) warn(file, r.ln, `stated-moral / thesis closer  «\u2026${tm[0]}\u2026»`); }
       if (r.sys && /\b(mercy|grief|love|the point|what it costs|the truth|matters most|in the end)\b/i.test(text))
         warn(file, r.ln, `system box editorializes (state rules, not theme)  «${text.slice(0, 56)}»`);
 

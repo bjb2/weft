@@ -40,6 +40,15 @@ const STYLE = `
 .weft button.ch:disabled{opacity:.4;cursor:default}
 .weft button.ch .req{color:var(--dim);font-size:13px}
 .weft button.ch .cost{color:var(--cool);font-size:13px}
+.weft .say{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px}
+.weft .say .pfp{flex:0 0 auto;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--cc,var(--accent2));color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px/1 Georgia,serif;border:1px solid var(--line)}
+.weft .say .pfp img{width:100%;height:100%;object-fit:cover;display:block}
+.weft .say .utter{flex:1 1 auto;min-width:0}
+.weft .say .who{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--cc,var(--accent));margin-bottom:3px}
+.weft .say .bubble{display:inline-block;background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--cc,var(--accent2));border-radius:4px;padding:8px 13px}
+.weft .say.self{flex-direction:row-reverse}
+.weft .say.self .utter{text-align:right}
+.weft .say.self .bubble{text-align:left;border-left:none;border-right:2px solid var(--cc,var(--accent2))}
 .weft .divider{text-align:center;color:var(--accent2);margin:22px 0;letter-spacing:6px}
 .weft .combat{border:1px solid #36415e;border-radius:6px;padding:14px 16px;margin:14px 0;background:rgba(0,0,0,.3)}
 .weft .combat .ename{color:var(--bad);letter-spacing:1px}
@@ -92,6 +101,14 @@ export function mount(game, opts = {}) {
     const b = assetPath + name;
     return `<img class="scene-art" src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.style.display='none';">`;
   };
+  // Resolve dialogue profile pictures: inject an <img> per `.pfp[data-pfp]`,
+  // using the same png -> svg fallback as scene art; if both fail, the colored
+  // disc with the speaker's initial (already in the span) shows through.
+  const wirePfp = (el) => el.querySelectorAll(".pfp[data-pfp]").forEach((p) => {
+    const b = assetPath + p.dataset.pfp;
+    p.insertAdjacentHTML("afterbegin",
+      `<img src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.remove();">`);
+  });
   const notesHtml = (notes) => notes && notes.length
     ? "<p>" + notes.map((n) => `<span class="${n.cls || "gain"}">${n.text}</span>`).join("<br>") + "</p>" : "";
 
@@ -121,6 +138,7 @@ export function mount(game, opts = {}) {
     } else {
       mainEl.innerHTML = `<p class="loss">Error: ${v.error}</p>`;
     }
+    wirePfp(mainEl);
     window.scrollTo(0, 0);
     wireHud();
     foot(v);

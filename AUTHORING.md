@@ -109,6 +109,15 @@ Rules the compiler enforces:
   `req`/`hide`/`do`.
 - Choice attribute lines (`req`/`do`/`hide`/`go`) are indented under their `*` choice.
 
+**`req`/`do`/`hide`/`go` and `${...}` are raw JavaScript — the compiler does NOT escape them.**
+- Mind your quotes inside strings. Simplest: use double quotes around text with
+  apostrophes — `chronicle("Buc-ee's")`. An unescaped quote produces a `SyntaxError` in the
+  generated `build/scenes.js`, not a friendly DSL error.
+- In `req:`, the hint after a **spaced** ` | ` is split off as the locked-message; everything
+  before it is the condition. Use `&&`/`||` freely in the condition (e.g.
+  `req: has('key') && v.brave | you hesitate`) — only a literal ` | ` (space-pipe-space)
+  starts the hint.
+
 ---
 
 ## 3. The authoring context `$`

@@ -12,9 +12,10 @@ export const I = (t) => "<i>" + t + "</i>";
 export const SMALL = (t) => '<span class="small">' + t + "</span>";
 
 // Plain-text projection for terminal / logs. Block tags become newlines,
-// the divider becomes a rule, inline tags are dropped.
+// the divider becomes a rule, dialogue becomes "Name: line", inline tags drop.
 export function toText(html) {
   return String(html)
+    .replace(/<div class="say[^"]*"[^>]*>[\s\S]*?<span class="who">([^<]*)<\/span>[\s\S]*?<span class="bubble">([\s\S]*?)<\/span>[\s\S]*?<\/div>/g, "\n$1: $2\n")
     .replace(/<div class="divider">[^<]*<\/div>/g, "\n   * * *\n")
     .replace(/<\/p>/g, "\n")
     .replace(/<div class="sys">/g, "\n~ ")

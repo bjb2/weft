@@ -12,7 +12,7 @@ import { recompute } from "./state.js";
 import { rngNext, rngInt } from "./rng.js";
 
 export const CONTEXT_KEYS = [
-  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL",
+  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL", "SAY",
   "get", "set", "flag", "add", "gain", "spend",
   "has", "give", "take", "equip", "unequip",
   "bond", "learn", "check", "rand", "randint", "note", "chronicle",
@@ -22,12 +22,28 @@ export function makeContext(game) {
   const st = game.state;
   const def = game.def;
   const items = def.items || {};
+  const cast = def.cast || {};
   const note = (text, cls = "gain") => { st.log.push({ text, cls }); };
 
   return {
     G: st,
     v: st.vars,
     P, SYS, DIV, B, I, SMALL,
+
+    // Attributed dialogue line. The compiler turns `@id: text` in a scene into
+    // SAY("id", `text`). The character is looked up in def.cast for its display
+    // name, profile-picture asset, accent color, and whether it is the player
+    // ("self"). Output is render-neutral: the DOM renderer paints a chat bubble
+    // and resolves the pfp image; toText() projects it to "Name: text".
+    SAY: (id, text = "") => {
+      const ch = cast[id] || {};
+      const who = ch.name || (ch.self ? st.name : id);
+      const self = ch.self ? " self" : "";
+      const cc = ch.color ? ` style="--cc:${ch.color}"` : "";
+      const initial = (who.trim()[0] || "?").toUpperCase();
+      const pfp = `<span class="pfp"${ch.pfp ? ` data-pfp="${ch.pfp}"` : ""}>${initial}</span>`;
+      return `<div class="say${self}"${cc}>${pfp}<span class="utter"><span class="who">${who}</span><span class="bubble">${text}</span></span></div>`;
+    },
 
     get: (k) => st.vars[k],
     set: (k, val) => ((st.vars[k] = val), val),

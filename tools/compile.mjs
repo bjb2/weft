@@ -44,6 +44,7 @@ function compileBody(lines, file, id) {
     else if (t.startsWith("!! ")) { flush(); top().push("SYS(`" + esc(t.slice(3)) + "`)"); }
     else if (t === "~~~") { flush(); top().push("DIV"); }
     else if (t.startsWith(":: ")) { flush(); top().push("`" + esc(t.slice(3)) + "`"); }
+    else if ((m = t.match(/^@([\w$]+):\s?(.*)$/))) { flush(); top().push("SAY(" + JSON.stringify(m[1]) + ",`" + esc(m[2]) + "`)"); }
     else para.push(t);
   }
   flush();
@@ -69,7 +70,7 @@ function compileScene(sc, file, links, combats) {
   if (sc.choices.length) {
     const cs = sc.choices.map((c, i) => {
       const p = [`id:"c${i}"`, "l:`" + esc(c.label) + "`"];
-      if (c.req) { const [expr, rq] = c.req.split("|").map((s) => s.trim()); p.push(`req:${fn("return (" + expr + ");")}`); if (rq) p.push(`rq:${JSON.stringify(rq)}`); }
+      if (c.req) { const i = c.req.indexOf(" | "); const expr = (i >= 0 ? c.req.slice(0, i) : c.req).trim(); const rq = i >= 0 ? c.req.slice(i + 3).trim() : ""; p.push(`req:${fn("return (" + expr + ");")}`); if (rq) p.push(`rq:${JSON.stringify(rq)}`); }
       if (c.hide) p.push(`hide:${fn("return (" + c.hide + ");")}`);
       if (c.do) p.push(`do:${fn(c.do + ";")}`);
       if (c.goExpr) p.push(`go:${fn("return (" + c.goExpr + ");")}`);
@@ -138,6 +139,10 @@ export async function compileGame(gameDir) {
   for (const m of blob.matchAll(/\bv\.([\w$]+)/g)) reads.add(m[1]);
   for (const m of blob.matchAll(/\bget\(\s*["'`]([\w$]+)["'`]/g)) reads.add(m[1]);
   for (const r of reads) if (!writes.has(r)) errors.push(`variable "v.${r}" is read but never written or declared (typo?)`);
+  // 5. dialogue speakers: every `@id:` line must name a declared character.
+  const castIds = new Set(Object.keys(def.cast || {}));
+  for (const m of blob.matchAll(/\bSAY\(\s*["']([\w$]+)["']/g))
+    if (!castIds.has(m[1])) errors.push(`speaker "@${m[1]}" is not a declared character (add it to def.cast)`);
 
   if (errors.length) { const e = new Error("compile failed:\n  " + errors.join("\n  ")); e.errors = errors; throw e; }
 

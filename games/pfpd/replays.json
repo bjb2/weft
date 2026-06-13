@@ -1,0 +1,6 @@
+[
+  { "name": "forced to get a real job", "seed": 1, "script": ["c0", "c0", "c1", "c1"], "expect": { "scene": "end_job", "ending": true } },
+  { "name": "arrested on I-35", "seed": 1, "script": ["c0", "c0", "c3", "c2"], "expect": { "scene": "end_arrested", "ending": true } },
+  { "name": "canceled at the peak", "seed": 1, "script": ["c0", "c0", "c2", "c0", "c1"], "expect": { "scene": "end_canceled", "ending": true } },
+  { "name": "back online (the win)", "seed": 1, "script": ["c0", "c0", "c2", "c0", "c0", "c3", "c0", "c4", "c1"], "expect": { "scene": "end_portal", "ending": true } }
+]

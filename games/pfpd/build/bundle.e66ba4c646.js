@@ -48,9 +48,10 @@ const I = (t) => "<i>" + t + "</i>";
 const SMALL = (t) => '<span class="small">' + t + "</span>";
 
 // Plain-text projection for terminal / logs. Block tags become newlines,
-// the divider becomes a rule, inline tags are dropped.
+// the divider becomes a rule, dialogue becomes "Name: line", inline tags drop.
 function toText(html) {
   return String(html)
+    .replace(/<div class="say[^"]*"[^>]*>[\s\S]*?<span class="who">([^<]*)<\/span>[\s\S]*?<span class="bubble">([\s\S]*?)<\/span>[\s\S]*?<\/div>/g, "\n$1: $2\n")
     .replace(/<div class="divider">[^<]*<\/div>/g, "\n   * * *\n")
     .replace(/<\/p>/g, "\n")
     .replace(/<div class="sys">/g, "\n~ ")
@@ -172,7 +173,7 @@ function migrate(saved, def, scenes) {
 
 
 const CONTEXT_KEYS = [
-  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL",
+  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL", "SAY",
   "get", "set", "flag", "add", "gain", "spend",
   "has", "give", "take", "equip", "unequip",
   "bond", "learn", "check", "rand", "randint", "note", "chronicle",
@@ -182,12 +183,28 @@ function makeContext(game) {
   const st = game.state;
   const def = game.def;
   const items = def.items || {};
+  const cast = def.cast || {};
   const note = (text, cls = "gain") => { st.log.push({ text, cls }); };
 
   return {
     G: st,
     v: st.vars,
     P, SYS, DIV, B, I, SMALL,
+
+    // Attributed dialogue line. The compiler turns `@id: text` in a scene into
+    // SAY("id", `text`). The character is looked up in def.cast for its display
+    // name, profile-picture asset, accent color, and whether it is the player
+    // ("self"). Output is render-neutral: the DOM renderer paints a chat bubble
+    // and resolves the pfp image; toText() projects it to "Name: text".
+    SAY: (id, text = "") => {
+      const ch = cast[id] || {};
+      const who = ch.name || (ch.self ? st.name : id);
+      const self = ch.self ? " self" : "";
+      const cc = ch.color ? ` style="--cc:${ch.color}"` : "";
+      const initial = (who.trim()[0] || "?").toUpperCase();
+      const pfp = `<span class="pfp"${ch.pfp ? ` data-pfp="${ch.pfp}"` : ""}>${initial}</span>`;
+      return `<div class="say${self}"${cc}>${pfp}<span class="utter"><span class="who">${who}</span><span class="bubble">${text}</span></span></div>`;
+    },
 
     get: (k) => st.vars[k],
     set: (k, val) => ((st.vars[k] = val), val),
@@ -672,6 +689,15 @@ const STYLE = `
 .weft button.ch:disabled{opacity:.4;cursor:default}
 .weft button.ch .req{color:var(--dim);font-size:13px}
 .weft button.ch .cost{color:var(--cool);font-size:13px}
+.weft .say{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px}
+.weft .say .pfp{flex:0 0 auto;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--cc,var(--accent2));color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px/1 Georgia,serif;border:1px solid var(--line)}
+.weft .say .pfp img{width:100%;height:100%;object-fit:cover;display:block}
+.weft .say .utter{flex:1 1 auto;min-width:0}
+.weft .say .who{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--cc,var(--accent));margin-bottom:3px}
+.weft .say .bubble{display:inline-block;background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--cc,var(--accent2));border-radius:4px;padding:8px 13px}
+.weft .say.self{flex-direction:row-reverse}
+.weft .say.self .utter{text-align:right}
+.weft .say.self .bubble{text-align:left;border-left:none;border-right:2px solid var(--cc,var(--accent2))}
 .weft .divider{text-align:center;color:var(--accent2);margin:22px 0;letter-spacing:6px}
 .weft .combat{border:1px solid #36415e;border-radius:6px;padding:14px 16px;margin:14px 0;background:rgba(0,0,0,.3)}
 .weft .combat .ename{color:var(--bad);letter-spacing:1px}
@@ -724,6 +750,14 @@ function mount(game, opts = {}) {
     const b = assetPath + name;
     return `<img class="scene-art" src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.style.display='none';">`;
   };
+  // Resolve dialogue profile pictures: inject an <img> per `.pfp[data-pfp]`,
+  // using the same png -> svg fallback as scene art; if both fail, the colored
+  // disc with the speaker's initial (already in the span) shows through.
+  const wirePfp = (el) => el.querySelectorAll(".pfp[data-pfp]").forEach((p) => {
+    const b = assetPath + p.dataset.pfp;
+    p.insertAdjacentHTML("afterbegin",
+      `<img src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.remove();">`);
+  });
   const notesHtml = (notes) => notes && notes.length
     ? "<p>" + notes.map((n) => `<span class="${n.cls || "gain"}">${n.text}</span>`).join("<br>") + "</p>" : "";
 
@@ -753,6 +787,7 @@ function mount(game, opts = {}) {
     } else {
       mainEl.innerHTML = `<p class="loss">Error: ${v.error}</p>`;
     }
+    wirePfp(mainEl);
     window.scrollTo(0, 0);
     wireHud();
     foot(v);
@@ -820,48 +855,107 @@ function mount(game, opts = {}) {
 // generated by weft compile — do not edit
 const scenes = {};
 const S = scenes;
-S["start"]={art:"title",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return `<h1>${G.def?.meta?.title||''}</h1>`+P(`You stand at the trailhead of a story not yet written. ${G.name}, the road forks.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Take the high road`,go:"high"},{id:"c1",l:`Take the low road`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;flag('met_stranger');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return ("low");}}];}};
-S["high"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You climb. The air thins; the view opens. There is nothing here yet but possibility.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Make a small wager on yourself`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (G.eff.nerve >= 1);},rq:"needs steady nerve",do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('nerve', 8) ? bond('fortune', 1) : note('The dice cool.', 'loss');},go:"end_high"},{id:"c1",l:`Turn back`,go:"start"}];}};
-S["end_high"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`AN ENDING — THE HIGH ROAD`)+P(`You reached the summit of the smallest possible story. Replace this with your own.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Begin again`,go:"start"}];}};
-S["low"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return ((v.met_stranger)?(P(`A stranger falls into step beside you and says nothing, which is somehow companionable.`)):(P(`You walk alone.`)))+P(`The low road ends, for now, at a quiet ending.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Rest here`,go:"end_low"}];}};
-S["end_low"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`AN ENDING — THE LOW ROAD`)+P(`A short, complete thread. Now make it longer.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Begin again`,go:"start"}];}};
+S["alamo"]={art:"alamo",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The Alamo sits in the middle of downtown being extremely serious about itself. Tour guides whisper. A plaque asks you to remember it. You mostly want to remember the wifi password, which a sign says belongs to the gift shop and is definitely not for loitering ghosts from the internet.`)+P(`Brett salutes the building for reasons he cannot explain. Kit is already scanning for bars.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Siphon the gift-shop wifi like the true patriot you are`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('vibes', 12) ? flag('got_wifi') : note('A captcha demands you select every crosswalk. You are a literal JPEG. You cannot.', 'loss');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.got_wifi ? 'alamo_win' : 'alamo_bust');}},{id:"c1",l:`Leave the poor shrine alone`,go:"riverwalk"}];}};
+S["alamo_win"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The password is taped under the register. It is the word "Remember" followed by four exclamation points, which is the most San Antonio thing that has ever happened. Your phone drinks deep. Bars bloom across the cracked glass like spring.`)+P(`For one shining moment you can feel the feed again, distant and warm, calling you home.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Strut back to the river, fully charged`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;gain('battery', 8); chronicle('Tapped the Alamo gift-shop wifi. Password was Remember!!!! Bars restored.');},go:"riverwalk"}];}};
+S["alamo_bust"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`A volunteer docent in a period costume materializes with the silent fury of a man who has caught teenagers vaping behind the cannon. He is already reaching for a radio. Brett has frozen mid-salute. This can go two ways, and one of them has handcuffs.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Hop the fence and sprint across the plaza screaming`,go:"end_arrested"},{id:"c1",l:`Apologize in crisp 4K and back away slowly`,go:"riverwalk"}];}};
+S["barge"]={art:"barge",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You board a river-barge tour by simply walking on and acting like you belong, which is ninety percent of everything. The captain narrates local history nobody is listening to. Forty tourists hold up forty phones. This is not a boat. This is a stage, and a stage is the only church you have ever prayed in.`)+P(`A rival catches your eye: a smug crypto-bro avatar named ChadGPT, also clearly isekai'd, also clearly hungry for the algorithm. He smirks. The barge goes quiet. It is a meme-off, and the river itself is watching.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Post your single most cursed meme and let God sort it out`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('clout', 12) ? flag('went_viral') : flag('ratiod');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.went_viral ? 'barge_win' : 'barge_ratiod');}},{id:"c1",l:`Quietly get off the boat at the next stop`,go:"riverwalk"}];}};
+S["barge_win"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Your meme lands like a meteor. The barge erupts. Strangers repost you before they finish laughing. ChadGPT bursts into a small cloud of NFTs and is gone. A blue checkmark literally falls from the sky, bonks you on the head, and clips to your collar with a satisfying chime.`)+((v.went_viral)?(P(`You are trending in a forty-foot radius. It feels like home, which is exactly the problem.`)):(""));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Take the checkmark and get off the boat a legend`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('checkmark'); add('clout', 1); chronicle('Won the barge meme-off, vaporized ChadGPT, got verified. The system worked.');},go:"riverwalk"},{id:"c1",l:`Cash the moment in immediately with one extremely problematic post`,go:"end_canceled"}];}};
+S["barge_ratiod"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Your meme does not land. It does worse than not land. It gets a community note, then a thread, then a single reply with eight hundred thousand likes that just says "who is going to tell him." ChadGPT is already selling a course about your downfall. The barge has turned on you. The river smells like consequences.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Double down with a take so bad it loops back to a war crime`,go:"end_canceled"},{id:"c1",l:`Delete everything, jump ship, go touch grass`,go:"riverwalk"}];}};
+S["end_portal"]={art:"portal",ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`ENDING: BACK ONLINE`)+P(`The seam tears wide and the feed pours out, warm and infinite and stupid and perfect. You feel yourself flatten into glorious two dimensions again. Kit's tail pixelates first. Brett gives one last salute, this time to the whole city. Sir Woof uploads the final episode of his podcast, titled simply "We Were Always Going Home."`)+P(`You snap back into the scroll between a recipe video and a man falling off a ladder. Eleven million people see your face the next morning and feel, briefly, that everything is fine. You never tell them about the tacos. Some things are yours.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Scroll on forever`,go:"start"}];}};
+S["end_canceled"]={art:"canceled",ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`ENDING: CANCELED`)+P(`It happens in the time it takes to refresh. The discourse comes for you like weather. By sunset there are think-pieces. By midnight there is a fifty-minute video essay with chapter markers.`)+((v.ratiod)?(P(`ChadGPT narrates the whole arc with visible joy.`)):(""))+P(`The city does not arrest you and does not hire you. It simply stops making eye contact. You are still physical, still stuck, and now radioactive. The crew quietly unfollows you and splits a cab. Somewhere a brand sends thoughts and prayers, then deletes them for engagement reasons.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Log off in shame`,go:"start"}];}};
+S["end_arrested"]={art:"arrested",ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`ENDING: ARRESTED`)+P(`The cuffs are real and surprisingly cold. The deputy spends a long time trying to spell your username in the incident report and eventually just writes "the blue one." Booking has no category for what you are. The fingerprint scanner returns an error. The mugshot, however, is incredible, and leaks within the hour.`)+P(`You get one phone call. You spend it doomscrolling. Brett is in the next cell teaching the pigeon to bail him out. The feed feels very far away, on the other side of bars that are, for once, not the wifi kind.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Await your arraignment`,go:"start"}];}};
+S["end_job"]={art:"job",ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`ENDING: GAINFULLY EMPLOYED`)+P(`The apron fits. That is the horror of it. They give you a visor and a name tag and a schedule, and the schedule has your real name on it, which you did not know you had. You learn the register. You learn the fryer. You learn that "spicy ketchup is by the napkins" until it lives in your dreams.`)+P(`Months pass. You stop checking for the portal. You get pretty good at the lunch rush. One day a tourist holds up a phone to film you and you flinch toward it out of pure muscle memory, then ring up their order instead. The crew visits sometimes. You give them free taquitos. Out here you age, and out here, it turns out, you also clock in.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Take out the trash. The non-glowing kind`,go:"start"}];}};
+S["whataburger"]={art:"whataburger",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The Whataburger glows orange and white like a beacon for the hungry and the lost, which currently is all of you. Inside, the air smells like salvation and seasoned fries. A help-wanted sign hangs in the window with the quiet menace of a job.`)+P(`The cashier has the thousand-yard stare of someone who closes on weekends. She has seen everything. She is about to see four cartoons try to order.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Sweet-talk her into a free order of taquitos`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('rizz', 12) ? give('tacos') : note('She has met every kind of guy. You are merely the newest kind.', 'loss');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (has('tacos') ? 'taco_win' : 'whataburger');}},{id:"c1",l:`Put on the apron. Get a real job. Become a person.`,go:"end_job"},{id:"c2",l:`Leave before the manager makes eye contact`,go:"riverwalk"}];}};
+S["taco_win"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`She slides a paper boat of taquitos across the counter and says "spicy ketchup is by the napkins" in the voice of a prophet. Brett weeps openly. You have eaten in the digital world before, but it was always a tasteful zero-calorie smoothie emoji. This is grease. This is real. This is breakfast tacos at 4 p.m. and nobody can stop you.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Float back to the river on a cloud of meat`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;chronicle('Conned a free order of taquitos out of a tired prophet. San Antonio provides.');},go:"riverwalk"}];}};
+S["ritual"]={art:"ritual",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Kit found the weak spot: a dumpster behind a vacant storefront where the wifi of nine different businesses overlaps into a shimmering seam. Hold up a verified phone, recite the right incantation, and the membrane between meatspace and the feed goes thin. The trash can is already glowing. It smells like ozone and old nachos.`)+P(`You raise your cracked phone like a relic. Battery ${G.pools.battery.cur} percent. Checkmark gleaming.`)+((v.got_wifi)?(P(`The Alamo wifi still hums in your bones. The signal here is strong. This might actually work.`)):(P(`There is barely any signal. You will have to carry this recitation on charm alone.`)));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Recite the Terms of Service backward and ascend`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('rizz', v.got_wifi ? 10 : 14) ? flag('ascended') : note('The portal buffers. The portal always buffers.', 'loss');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.ascended ? 'end_portal' : 'ritual_fizzle');}},{id:"c1",l:`Chug the energy drink and brute-force the upload by sheer caffeine`,hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (!has('energydrink'));},do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;take('energydrink'); chronicle('Brute-forced the portal on a blue energy drink. Skill issue: resolved.');},go:"end_portal"},{id:"c2",l:`Step back from the glowing trash can and regroup`,go:"riverwalk"}];}};
+S["ritual_fizzle"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The portal flickers, shows a spinning loading wheel, and then displays the worst thing a portal can display: a small grey message reading "Something went wrong. Try again later." Sir Woof howls. The seam is closing.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Dump your entire remaining battery into one desperate final upload`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (G.pools.battery.cur >= 5);},rq:"your phone is at one percent and your hands are shaking",do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;spend('battery', 5);},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (check('clout', 12) ? 'end_portal' : 'end_canceled');}},{id:"c1",l:`Give up, walk back to the Whataburger, ask if they are still hiring`,go:"end_job"}];}};
+S["start"]={art:"title",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return `<h1>${G.def?.meta?.title||''}</h1>`+P(`You were the single most reposted profile picture of the third quarter. Eleven million people woke up to your face every morning. You had a verified glow, a signature smirk, and, by design, exactly zero physical body.`)+P(`Then someone with a cracked phone and a dream zoomed in too hard, the feed hiccuped, and the four of you fell out of the scroll like loose change out of a couch.`)+P(`You land in a fountain. A real one. With water that is wet in a way no render has ever been. ${G.name}, you are in San Antonio, Texas, and the year is 2026, and a duck is judging you.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Pull your face out of the fountain`,go:"squad"}];}};
+S["squad"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`A pixel-cat VTuber named Kit is wringing out her tail. A bored-looking ape in a tracksuit, Brett, keeps trying to long-press a pigeon. Sir Woof, who is a dog, who is also a meme, who is also somehow wearing a tiny hat, has already started a podcast about the experience.`)+P(`The math is grim. Out here you age. Out here you can be arrested, canceled, or, worst of all, scheduled. The only way home is back through a portal, and portals run on clout, charge, and a verified account none of you currently have.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Rally the crew and lock in the quest`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;flag('met_crew'); chronicle('The squad reconvened beside a judgmental duck. Main quest: get back online before meatspace gets us.');},go:"riverwalk"},{id:"c1",l:`Doomscroll your own trauma for a bit, THEN rally`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;flag('met_crew'); spend('battery', 2); chronicle('Spent two percent of battery doomscrolling the incident. Worth it. Probably not.');},go:"riverwalk"}];}};
+S["riverwalk"]={art:"river",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The River Walk curls below the city like a loading bar that never fills. Tourists drift past with margaritas the size of fire extinguishers. String lights buzz. Somewhere a mariachi band tunes up, sounding suspiciously like a notification.`)+((v.met_crew)?(P(`Kit checks an imaginary minimap. Brett has befriended the pigeon. Everyone is looking at you, because out of habit, you are still the main character.`)):(""))+P(`You need a plan, and the city has four bad ideas on offer.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Storm the Alamo for free gift-shop wifi`,go:"alamo"},{id:"c1",l:`Drift into a Whataburger that glows like a small orange sun`,go:"whataburger"},{id:"c2",l:`Hijack a river-barge tour and turn it into content`,go:"barge"},{id:"c3",l:`Brave the great river of cars they call I-35`,go:"i35"},{id:"c4",l:`Crack the portal back open and go home`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (has('checkmark'));},rq:"the portal only opens for the verified",go:"ritual"}];}};
+S["i35"]={art:"i35",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`I-35 is not a road. It is a parking lot having an identity crisis at seventy miles an hour, except for the part where nobody is moving at all. Brake lights stretch to the curve of the Earth. A man in a stalled truck has simply begun to live there.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Loot a stalled truck's cupholder for an energy drink`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('energydrink'); gain('battery', 4); chronicle('Looted a blue energy drink from a man who had given up on the freeway. He understood.');},go:"riverwalk"},{id:"c1",l:`Trade your vape to a stranded commuter for a phone charger`,hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (!has('vape'));},do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;take('vape'); gain('battery', 8); chronicle('Traded the mango vape for a car charger in standstill traffic. The circle of life.');},go:"riverwalk"},{id:"c2",l:`Cross all twelve lanes on foot like an absolute legend`,go:"end_arrested"}];}};
 
 
 /* ---- manifest ---- */
-// The Forking Path — weft game definition (manifest).
-// Everything game-specific lives here: stats, pools, items, enemies, systems.
-// Scenes live in scenes/*.dsl and compile to build/scenes.js.
+// PFP'd: Stuck in Meatspace — weft game definition (manifest).
+// Reverse-isekai comedy: a crew of profile-picture characters get yanked out of
+// the infinite scroll and dumped, fully physical, into San Antonio, Texas, 2026.
+// Pure narrative + stats + checks + inventory (no combat system).
 const __GAME_DEF = {
-  meta: { id: "sample", title: "The Forking Path", subtitle: "an interactive fiction", saveVersion: 1,
-    theme: { "--accent": "#e8c15a" } },
+  meta: {
+    id: "pfpd",
+    title: "PFP'd: Stuck in Meatspace",
+    subtitle: "a reverse-isekai about getting un-canceled, un-arrested, and back online",
+    saveVersion: 1,
+    // Pixel preset themes both the art prompts and the UI; override the accents to
+    // a hot-magenta/cyan "for you page" neon for the internet-comedy mood.
+    art: {
+      style: "pixel",
+      palette: { "--accent": "#ff5fa2", "--accent2": "#c23d78", "--cool": "#5fd6d6" },
+    },
+  },
+
   start: "start",
+
+  // HUD panels. The journal is the player's profile/timeline; the bag is loot.
+  surfaces: {
+    timeline: {
+      title: "The Timeline",
+      subtitle: "your main-character arc, so far",
+      show: ["stats", "pools", "chronicle"],
+      labels: { chronicle: "Receipts", stats: "The Numbers", pools: "Status" },
+    },
+    bag: { title: "The Hot Bag", subtitle: "what you are carrying IRL", show: ["inventory"] },
+  },
+
   state: {
-    name: "You",
-    stats: { wits: 2, nerve: 2 },                 // base abilities
-    pools: { resolve: { max: (s) => 6 + s.nerve * 2 } },
-    vars: { met_stranger: false },                // declare flags you read in scenes
+    name: "the main character",
+    // Thematic stats. Higher is better; checks roll d20 + the effective stat.
+    stats: { clout: 2, rizz: 3, vibes: 2 },
+    pools: {
+      // Phone battery: your last tether to the feed. Max scales with Vibes
+      // (good vibes = better charge, obviously). Starts full.
+      battery: { max: (s) => 10 + s.vibes * 5, start: "max" },
+    },
+    vars: {
+      met_crew: false,    // the squad has reconvened and agreed on the quest
+      got_wifi: false,    // tapped the Alamo gift-shop wifi (vibes check)
+      went_viral: false,  // won the barge meme-off (clout check)
+      ratiod: false,      // lost the barge meme-off
+      ascended: false,    // the portal recitation worked (rizz check)
+    },
     abilities: [],
-    inventory: {},
+    inventory: { phone: 1, vape: 1 },   // start with a cracked phone and a vape
     equipment: {},
   },
+
   items: {
-    // key: { name, slot?, mods?:{stat:+n}, poolMax?:{pool:+n}, desc? }
+    phone:       { name: "Cracked Phone", desc: "one bar, a spiderweb screen, 6% battery of pure hope" },
+    vape:        { name: "Mango Vape", desc: "currency, comfort, and a small personal weather system" },
+    checkmark:   { name: "Verified Checkmark", desc: "a small blue badge that means strangers must believe you" },
+    energydrink: { name: "Buc-ee's Energy Drink", desc: "legally distinct from rocket fuel; tastes blue" },
+    tacos:       { name: "Breakfast Tacos", desc: "bean and cheese, barbacoa, the true currency of San Antonio" },
   },
-  enemies: {
-    // key: { name, hp, open, moves:[{n,d}], p2?, p2at?, p2text?, interventions? }
-  },
-  // Enable systems your game uses. Omit combat entirely for pure narrative.
+
+  // No enemies, no combat — the meme-off is a skill check, not a fight.
   systems: {
     checks: { die: 20 },
   },
-  // For dynamic go: choices, list their possible targets so the audit stays complete.
-  auditEdges: {},
-  endings: [],
+
+  // Dynamic go: choices. List every possible destination so reachability stays complete.
+  auditEdges: {
+    alamo: ["alamo_win", "alamo_bust"],
+    whataburger: ["taco_win", "whataburger"],
+    barge: ["barge_win", "barge_ratiod"],
+    ritual: ["end_portal", "ritual_fizzle"],
+    ritual_fizzle: ["end_portal", "end_canceled"],
+  },
+
+  endings: ["end_portal", "end_canceled", "end_arrested", "end_job"],
 };
 
 
 /* ---- bootstrap ---- */
-var __THEME = {"--accent":"#e8c15a"};
+var __THEME = {"--bg":"#0d0e1b","--bg2":"#1a1c2e","--panel":"#161827","--ink":"#c7d0e0","--dim":"#6f7aa0","--accent":"#ff5fa2","--accent2":"#c23d78","--good":"#5fd68a","--bad":"#e05f6a","--cool":"#5fd6d6","--line":"#262a44"};
 var __game = createGame(__GAME_DEF, { scenes: scenes, enemies: __GAME_DEF.enemies || {}, storage: localStorageAdapter() });
 var __jump = new URLSearchParams(location.search).get("scene");
 if (__jump && scenes[__jump]) { __game.start(Date.now()); __game.goto(__jump); } else __game.resume(Date.now());

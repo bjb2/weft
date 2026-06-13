@@ -48,9 +48,10 @@ const I = (t) => "<i>" + t + "</i>";
 const SMALL = (t) => '<span class="small">' + t + "</span>";
 
 // Plain-text projection for terminal / logs. Block tags become newlines,
-// the divider becomes a rule, inline tags are dropped.
+// the divider becomes a rule, dialogue becomes "Name: line", inline tags drop.
 function toText(html) {
   return String(html)
+    .replace(/<div class="say[^"]*"[^>]*>[\s\S]*?<span class="who">([^<]*)<\/span>[\s\S]*?<span class="bubble">([\s\S]*?)<\/span>[\s\S]*?<\/div>/g, "\n$1: $2\n")
     .replace(/<div class="divider">[^<]*<\/div>/g, "\n   * * *\n")
     .replace(/<\/p>/g, "\n")
     .replace(/<div class="sys">/g, "\n~ ")
@@ -172,7 +173,7 @@ function migrate(saved, def, scenes) {
 
 
 const CONTEXT_KEYS = [
-  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL",
+  "G", "v", "P", "SYS", "DIV", "B", "I", "SMALL", "SAY",
   "get", "set", "flag", "add", "gain", "spend",
   "has", "give", "take", "equip", "unequip",
   "bond", "learn", "check", "rand", "randint", "note", "chronicle",
@@ -182,12 +183,28 @@ function makeContext(game) {
   const st = game.state;
   const def = game.def;
   const items = def.items || {};
+  const cast = def.cast || {};
   const note = (text, cls = "gain") => { st.log.push({ text, cls }); };
 
   return {
     G: st,
     v: st.vars,
     P, SYS, DIV, B, I, SMALL,
+
+    // Attributed dialogue line. The compiler turns `@id: text` in a scene into
+    // SAY("id", `text`). The character is looked up in def.cast for its display
+    // name, profile-picture asset, accent color, and whether it is the player
+    // ("self"). Output is render-neutral: the DOM renderer paints a chat bubble
+    // and resolves the pfp image; toText() projects it to "Name: text".
+    SAY: (id, text = "") => {
+      const ch = cast[id] || {};
+      const who = ch.name || (ch.self ? st.name : id);
+      const self = ch.self ? " self" : "";
+      const cc = ch.color ? ` style="--cc:${ch.color}"` : "";
+      const initial = (who.trim()[0] || "?").toUpperCase();
+      const pfp = `<span class="pfp"${ch.pfp ? ` data-pfp="${ch.pfp}"` : ""}>${initial}</span>`;
+      return `<div class="say${self}"${cc}>${pfp}<span class="utter"><span class="who">${who}</span><span class="bubble">${text}</span></span></div>`;
+    },
 
     get: (k) => st.vars[k],
     set: (k, val) => ((st.vars[k] = val), val),
@@ -672,6 +689,15 @@ const STYLE = `
 .weft button.ch:disabled{opacity:.4;cursor:default}
 .weft button.ch .req{color:var(--dim);font-size:13px}
 .weft button.ch .cost{color:var(--cool);font-size:13px}
+.weft .say{display:flex;gap:10px;align-items:flex-start;margin:0 0 14px}
+.weft .say .pfp{flex:0 0 auto;width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--cc,var(--accent2));color:var(--bg);display:flex;align-items:center;justify-content:center;font:600 16px/1 Georgia,serif;border:1px solid var(--line)}
+.weft .say .pfp img{width:100%;height:100%;object-fit:cover;display:block}
+.weft .say .utter{flex:1 1 auto;min-width:0}
+.weft .say .who{display:block;font-size:11px;letter-spacing:1.2px;text-transform:uppercase;color:var(--cc,var(--accent));margin-bottom:3px}
+.weft .say .bubble{display:inline-block;background:var(--panel);border:1px solid var(--line);border-left:2px solid var(--cc,var(--accent2));border-radius:4px;padding:8px 13px}
+.weft .say.self{flex-direction:row-reverse}
+.weft .say.self .utter{text-align:right}
+.weft .say.self .bubble{text-align:left;border-left:none;border-right:2px solid var(--cc,var(--accent2))}
 .weft .divider{text-align:center;color:var(--accent2);margin:22px 0;letter-spacing:6px}
 .weft .combat{border:1px solid #36415e;border-radius:6px;padding:14px 16px;margin:14px 0;background:rgba(0,0,0,.3)}
 .weft .combat .ename{color:var(--bad);letter-spacing:1px}
@@ -724,6 +750,14 @@ function mount(game, opts = {}) {
     const b = assetPath + name;
     return `<img class="scene-art" src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.style.display='none';">`;
   };
+  // Resolve dialogue profile pictures: inject an <img> per `.pfp[data-pfp]`,
+  // using the same png -> svg fallback as scene art; if both fail, the colored
+  // disc with the speaker's initial (already in the span) shows through.
+  const wirePfp = (el) => el.querySelectorAll(".pfp[data-pfp]").forEach((p) => {
+    const b = assetPath + p.dataset.pfp;
+    p.insertAdjacentHTML("afterbegin",
+      `<img src="${b}.png" alt="" onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${b}.svg';}else this.remove();">`);
+  });
   const notesHtml = (notes) => notes && notes.length
     ? "<p>" + notes.map((n) => `<span class="${n.cls || "gain"}">${n.text}</span>`).join("<br>") + "</p>" : "";
 
@@ -753,6 +787,7 @@ function mount(game, opts = {}) {
     } else {
       mainEl.innerHTML = `<p class="loss">Error: ${v.error}</p>`;
     }
+    wirePfp(mainEl);
     window.scrollTo(0, 0);
     wireHud();
     foot(v);
@@ -820,70 +855,140 @@ function mount(game, opts = {}) {
 // generated by weft compile — do not edit
 const scenes = {};
 const S = scenes;
-S["start"]={art:"title",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return `<h1>${G.def?.meta?.title||''}</h1>`+P(`Rain hammers the slates of Ashford Manor. Lord Ashford lies three days dead in the cold room, and his fortune dangles between three living hands. They sent for you, ${G.name}, because the village constable lost his nerve at the threshold.`)+P(`The steward meets you under the dripping portico, lantern raised, smile thin as a wire.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Step inside and begin`,go:"foyer"}];}};
-S["foyer"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The great hall swallows the lamplight. Doors lead off in every direction, each one a question. Somewhere upstairs a clock you cannot see counts down to the reading of the will.`)+((v.met_crane)?(P(`Crane the steward hovers at the edge of the dark, watching which door you choose.`)):(P(`Crane the steward bows you in, then withdraws to watch from the shadow of the stair.`)));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Search the study`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;flag('met_crane');},go:"study"},{id:"c1",l:`Search the library`,go:"library"},{id:"c2",l:`Descend toward the cellar`,go:"cellar"},{id:"c3",l:`Take tea with the family in the parlor`,go:"parlor"},{id:"c4",l:`Climb the back stair to the attic`,hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (!has('key'));},go:"attic"},{id:"c5",l:`Gather the household and make your accusation`,go:"accuse"}];}};
-S["study"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The late Lord's study reeks of pipe smoke and ash. The estate ledger lies open on the desk, a fresh inkwell beside it. The figures march down the page in two different hands.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Read the columns closely`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('wits', 13) ? flag('ledger_clue') : note('The figures blur; you cannot fault them.', 'loss');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.ledger_clue ? 'study_found' : 'study_miss');}},{id:"c1",l:`Leave the study`,go:"foyer"}];}};
-S["study_found"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You see it at once: a whole column of debts entered after the Lord's death, in a steadier hand than a dying man could hold. Someone has been writing the estate poorer on paper while fattening a private purse. You take the ledger.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Pocket the ledger and withdraw`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('ledger');},go:"foyer"}];}};
-S["study_miss"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The numbers swim. Tired and rain-soaked, you cannot make the columns confess. Perhaps with a clearer head you might try again.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Return to the hall`,go:"foyer"}];}};
-S["library"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Floor to ceiling with rotting calf-bound spines. A grate of cold ashes holds one survivor: a half-burned letter, the Lord's seal still legible. *If you alter one figure more, I will see you hang* — and then the fire took the name of who he meant.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Rescue the letter from the grate`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('letter');},go:"foyer"},{id:"c1",l:`Leave the library`,go:"foyer"}];}};
-S["cellar"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The cellar stair drops into black water-smell and the small sounds of things moving. A draught snuffs your candle halfway down. To go on you must trust your feet and your nerve.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Feel your way down into the dark`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;check('nerve', 12) ? flag('cellar_ok') : note('Your courage fails on the seventh step.', 'loss');},go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.cellar_ok ? 'cellar_key' : 'cellar_fail');}},{id:"c1",l:`Climb back to the light`,go:"foyer"}];}};
-S["cellar_key"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You hold steady. At the bottom, hung on a nail behind the wine racks where no servant would bother, a brass key still warm from a recent hand. Attic-shaped. You take it and climb.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Return to the hall with the key`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('key');},go:"foyer"}];}};
-S["cellar_fail"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The dark presses in and your heart bolts. You scramble back up the stairs, candle dead, hands shaking. Whatever waits below will wait.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Catch your breath in the hall`,go:"foyer"}];}};
-S["parlor"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The family takes tea as though no corpse cools overhead. Lydia, the niece, weeps on cue. Dr. Mallow, the late Lord's physician, stirs his cup and watches you over the rim. Crane pours, silent, his sleeves — you notice — stained faintly with fresh ink.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Press Lydia about her debts`,hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.read_will);},do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;note('She inherits least of the three. She knows it, and it frightens her.', 'gain');},go:"parlor"},{id:"c1",l:`Press Dr. Mallow about the death`,hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.read_will);},do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;note('Heart failure, he insists. He signed the certificate himself.', 'gain');},go:"parlor"},{id:"c2",l:`Withdraw to the hall`,go:"foyer"}];}};
-S["attic"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Under the eaves, rain drums an inch above your skull. A steamer trunk crouches in the corner, and your brass key fits its lock as if cut for it.`)+((v.read_will)?(P(`The forged will lies open across your knees: Crane's careful hand mimicking a dead man's signature, naming Crane himself residual heir.`)):(P(`The lock is stiff with disuse; forcing it will cost what little composure the night has left you. (Composure ${G.pools.composure.cur}/${G.pools.composure.max})`)));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Force the trunk open`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (G.pools.composure.cur >= 2);},rq:"your nerves are too frayed to wrestle the lock",hide:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (v.read_will);},do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;spend('composure', 2); flag('read_will'); note('Inside: a second will, freshly inked.', 'gain');},go:"attic"},{id:"c1",l:`Go back down the stair`,go:"foyer"}];}};
-S["accuse"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You ring the bell. Lydia, Mallow, and Crane assemble beneath the cold portrait of the man they are about to inherit. The clock upstairs stops. Whatever you say now, you say for the record — and for the rope.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Accuse Crane the steward`,go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return ((has('ledger') && has('letter') && v.read_will) ? 'end_solved' : 'end_wrong');}},{id:"c1",l:`Accuse Lydia the niece`,go:"end_wrong"},{id:"c2",l:`Accuse Dr. Mallow the physician`,go:"end_wrong"},{id:"c3",l:`Say nothing. Slip out into the rain and leave them to it`,go:"end_flee"}];}};
-S["end_solved"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`THE INHERITANCE UNDONE`)+P(`You lay them side by side: the doctored ledger, the dead man's threat, the forged will from the attic trunk. Three threads, one hand. Crane's composure cracks at the word *forgery*; he is taken in irons before the clock strikes again. The estate passes clean. They will speak of the night the inspector read a house like a confession.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Close the case`,go:"start"}];}};
-S["end_wrong"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`THE WRONG NECK`)+P(`You name your suspect with a confidence the evidence cannot bear. The accused goes white, then furious, then free — your case unravels in open court within the month. The true hand collects the inheritance and a reputation for grief. You leave Ashford with the rain and keep, ever after, the cold suspicion that you held the truth and let it slip.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Live with it`,go:"start"}];}};
-S["end_flee"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`THE ROAD AWAY`)+P(`Some houses are not meant to be solved. You set down the lamp, turn up your collar, and walk out into the storm without a backward glance. Behind you the will is read; a fortune changes hands in a manner no one will ever question. You never learn who. You tell yourself that is mercy. The road does not believe you.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Walk on`,go:"start"}];}};
+S["start"]={art:"door",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The tide has gone out of the old reliquary, leaving its lower halls drowned in still black water. ${G.name}, you came down the shaft for what the guild calls the Sunken Vault — and what the dead called a tomb.`)+P(`A bronze door waits, green with brine. Someone has scratched a warning into it.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Read the warning`,go:"inscription"},{id:"c1",l:`Ignore it and descend`,go:"vestibule"}];}};
+S["inscription"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The scratches resolve into words: *The Warden does not sleep. It drinks the deep and is made whole. Bind it, or break its bracing, or it will outlast you.*`)+P(`You commit it to memory. Forewarned is half-armed.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Descend into the vault`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;flag('warned');},go:"vestibule"}];}};
+S["vestibule"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return ((v.warned)?(P(`The warning rings in your ears as you drop into knee-deep water. A drowned quartermaster's locker hangs open before you.`)):(P(`You drop into knee-deep water. A drowned quartermaster's locker hangs open before you, two relics catching your lamp.`)))+P(`You can take one. Your dagger you keep either way.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Take the Bronze Tideblade`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('blade'); equip('blade'); chronicle('Armed yourself with the Bronze Tideblade.');},go:"hall"},{id:"c1",l:`Take the Pearl Charm`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('charm'); equip('charm'); chronicle('Took the Pearl Charm for a steadier breath.');},go:"hall"}];}};
+S["hall"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The great hall forks. Lamp-light gutters on water that laps at three passages: a guardroom where something metal still paces, a barred cell, and a silted alcove.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Force the guardroom door`,go:"guardroom"},{id:"c1",l:`Look into the barred cell`,go:"companion"},{id:"c2",l:`Search the silted alcove`,go:"alcove"}];}};
+S["companion"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`A diver named Mara is chained to the cell wall, half-drowned but breathing. "Cut me loose," she rasps, "and I'll watch your back down there. I know the Warden's tricks."`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Cut her chains free`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;bond('companion', 2); flag('freed_companion'); chronicle('Cut the diver Mara free; she dives at your back now.');},go:"hall"},{id:"c1",l:`Leave her — you work alone`,go:"hall"}];}};
+S["alcove"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`You rake through the silt and your fingers close on a small glass vial: a salt tonic, the kind divers carry against the cold dark.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Pocket it and return`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('tonic');},go:"hall"}];}};
+S["guardroom"]={art:"guardroom",combat:"sentinel",win:"gallery",lose:"defeat",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The guardroom floods to your waist. The Sentinel that paces it has not stopped its rounds in three hundred years.`);}};
+S["gallery"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Past the wrecked Sentinel, a gallery of dead lockers lines the wall. A gilded key hangs at the belt of a skeleton still seated at his post — and you finally understand the Warden's bracing.`)+((v.freed_companion)?(P(`Mara slips in behind you, prying at the lockers, covering the dark.`)):(""));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Take the gilded key and seek the vault door`,do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;give('vaultkey'); learn('rend'); chronicle('Lifted the gilded vault key; learned the Rend technique.');},go:"sealeddoor"},{id:"c1",l:`Gamble — dive the flooded grate`,go:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (check('body', 10) ? 'sealeddoor' : 'guardroom');}},{id:"c2",l:`Flee out through the culvert`,go:"escape"}];}};
+S["sealeddoor"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`A bronze door, twin to the one above, seals the inner vault. Its lock is a single gilded slot.`);},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Turn the vault key in the lock`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (has('vaultkey'));},rq:"the lock will not turn without its key",go:"approach"},{id:"c1",l:`Withdraw to the gallery`,go:"gallery"}];}};
+S["approach"]={t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`Beyond the door the water deepens to a black mirror. The Warden's dais waits at its center. You steady your breath.`)+((v.freed_companion)?(P(`Mara checks her pry-bar and nods. "When it sheds its shell, I'll jam the gears. Make it count."`)):(""));},c:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return [{id:"c0",l:`Drink the salt tonic and descend`,req:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return (has('tonic'));},rq:"you have nothing to drink",do:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;take('tonic'); gain('hp', 6);},go:"vault"},{id:"c1",l:`Descend cold`,go:"vault"}];}};
+S["vault"]={art:"vault",combat:"warden",win:"victory",lose:"defeat",t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return P(`The Warden unfolds from the dais, brine pouring off it, and the deep goes still.`);}};
+S["victory"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`THE VAULT IS YOURS`)+P(`The Warden comes apart in the black water and does not knit again. In the quiet that follows you find the reliquary's heart: a single cold pearl the size of a fist.`)+((v.freed_companion)?(P(`Mara surfaces beside you, grinning through the murk. You did not do this alone.`)):(""))+P(`You carry it up into the light.`);}};
+S["defeat"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`THE DEEP CLOSES OVER YOU`)+P(`The water takes you down past the dais, past the dark, into the long cold the divers warned of. The vault keeps its pearl, and you.`);}};
+S["escape"]={ending:true,t:($)=>{const {G,v,P,SYS,DIV,B,I,SMALL,SAY,get,set,flag,add,gain,spend,has,give,take,equip,unequip,bond,learn,check,rand,randint,note,chronicle}=$;return SYS(`YOU LIVE TO DIVE AGAIN`)+P(`You haul yourself up through the culvert and break the surface, lungs burning, empty-handed but breathing. The Sunken Vault keeps its secrets. There will be other tides.`);}};
 
 
 /* ---- manifest ---- */
-// The Ashford Inheritance — weft game definition (manifest).
-// Pure-narrative Gothic mystery: no combat system, no enemies.
+// The Sunken Vault — weft game definition (manifest).
+// A stat/combat/inventory dungeon crawl: equipment, abilities, bonds, a simple
+// foe and a two-phase boss with a data-driven ally intervention.
 const __GAME_DEF = {
   meta: {
-    id: "mystery",
-    title: "The Ashford Inheritance",
-    subtitle: "a Gothic mystery in one long night",
+    id: "crawl",
+    title: "The Sunken Vault",
+    subtitle: "a dive into the drowned reliquary",
     saveVersion: 1,
-    theme: { "--accent": "#b08d57", "--bg": "#0d0b10" },
+    theme: { "--accent": "#5ad6e8", "--bg": "#06090f" },
+    art: { style: "ink-wash" },
   },
+
   start: "start",
+
+  // HUD control panels (top-level). Each becomes a "✦ Title" button opening an overlay.
+  surfaces: {
+    journal: { title: "Dive Log", subtitle: "the descent so far", show: ["stats", "pools", "bonds", "chronicle"], bondTiers: { 3: "sworn", 2: "trusted", 1: "met" } },
+    satchel: { title: "Satchel", show: ["inventory", "equipment", "abilities"] },
+  },
+
   state: {
-    name: "Inspector Vane",
-    stats: { wits: 3, nerve: 2 },                  // base abilities
-    pools: { composure: { max: (s) => 4 + s.nerve * 2 } }, // derived from nerve
-    vars: {
-      ledger_clue: false,   // wits check: spotted the forged column
-      cellar_ok: false,     // nerve check: held steady in the dark
-      read_will: false,     // opened the trunk, read the forged will
-      met_crane: false,     // spoke with the steward
+    name: "Diver",
+    stats: { body: 3, mind: 2, heart: 2 },                       // base 2-3
+    pools: {
+      hp:    { max: (s) => 16 + s.body * 2 },                    // pool tied to body
+      focus: { max: 6, start: "max" },                           // combat resource
     },
-    abilities: [],
+    vars: { warned: false, freed_companion: false },             // declared flags
+    bonds: { companion: 0 },                                     // relationship counter
+    abilities: ["snare", "cut", "mend", "mirror"],               // ⊆ declared techniques
     inventory: {},
-    equipment: {},
+    equipment: { weapon: "dagger" },                             // starts equipped
   },
+
   items: {
-    letter: { name: "Scorched Letter", desc: "a threat in the late Lord's own ink" },
-    key:    { name: "Brass Cellar Key", desc: "cold, toothed, attic-bound" },
-    ledger: { name: "Estate Ledger", desc: "columns that do not add up" },
+    dagger: { name: "Diver's Dagger", slot: "weapon", mods: { body: 1 }, desc: "a stubby blade for tight water" },
+    blade:  { name: "Bronze Tideblade", slot: "weapon", mods: { body: 2 }, desc: "old guard-steel, still keen" },
+    charm:  { name: "Pearl Charm", slot: "trinket", mods: { mind: 1 }, poolMax: { focus: 2 }, desc: "steadies the breath" },
+    tonic:  { name: "Salt Tonic", desc: "a bitter restorative" },
+    vaultkey: { name: "Gilded Vault Key", desc: "warm to the touch" },
   },
-  // No enemies, no combat — pure narrative.
+
+  enemies: {
+    // Simple foe: a short linear cycle, no phases.
+    sentinel: {
+      name: "Bronze Sentinel", hp: 14,
+      open: "A corroded automaton grinds upright, halberd swinging to guard.",
+      moves: [
+        { n: "Halberd Sweep", d: 4, tele: "It hauls the halberd back to sweep." },
+        { n: "Shield Bash", d: 3, tele: "It cocks its shield arm." },
+        { n: "Pike Thrust", d: 5, tele: "It levels the pike at your chest." },
+      ],
+    },
+
+    // Boss: two phases, stance / charge+release / heal-with-drain, ally hooks.
+    warden: {
+      name: "The Drowned Warden", hp: 26,
+      open: "The Warden rises from the flooded dais, brine sheeting off ancient bronze.",
+      p2at: 11,
+      p2text: "The shell of lacquer splits — what's left of the Warden moves like the tide itself.",
+      moves: [
+        { n: "Stance: Brine-lacquer", kind: "stance", st: "iron", text: "Lacquer hardens over the Warden.", tele: "It braces, hard as a hull." },
+        { n: "Needle Lance", d: 5, drain: 2, tele: "It draws the long needle." },
+        { n: "Gathering Tide", kind: "charge", text: "Water spirals up around the Warden.", tele: "A great surge is gathering." },
+        { n: "Crashing Wave", d: 11, kind: "release", tele: "The wave hangs, ready to fall." },
+        { n: "Drink the Deep", kind: "heal", h: 4, text: "It pulls the flood into its wounds and knits.", tele: "It draws on the deep." },
+      ],
+      p2: [
+        { n: "Stance: Riptide", kind: "stance", st: "flow", text: "The Warden runs loose as a current.", tele: "It flows; a plain blow will break it." },
+        { n: "Flood Strike", d: 6, tele: "It rakes a torrent at you." },
+        { n: "Maelstrom", kind: "charge", text: "A whirl winds tight around it.", tele: "Something vast is winding up." },
+        { n: "Undertow", d: 12, kind: "release", tele: "The undertow coils to drag you down." },
+      ],
+      interventions: [
+        { on: "defeat", when: ($) => $.G.bonds.companion >= 2, once: true, hp: 10, log: "Mara hauls you out of the black water — you breathe, and stand." },
+        { on: "phase2", once: true, snare: true, log: "Mara jams a pry-bar in the gears — the Warden seizes for a breath." },
+      ],
+    },
+  },
+
   systems: {
     checks: { die: 20 },
+    combat: {
+      resource: "focus",
+      power: "body",
+      strikeBase: 2,
+      startResourceFrac: 0.75,
+      roundRegen: 1,
+      guardRegen: 2,
+      foeMul: 1.0,
+      hpPool: "hp",
+      winHpFloor: 1,
+      techniques: {
+        snare:  { name: "Snare",  desc: "bind the foe a turn", cost: 2, type: "bind", base: 1, vsFlow: "fail" },
+        cut:    { name: "Cut",    desc: "sharp damage", cost: 2, type: "damage", stat: "body", base: 3, vsFlow: "half" },
+        mend:   { name: "Mend",   desc: "knit your wounds", cost: 3, type: "heal", pool: "hp", base: 3, stat: "heart", mul: 1 },
+        mirror: { name: "Mirror", desc: "reflect the next blow", cost: 3, type: "reflect" },
+        rend:   { name: "Rend",   desc: "interrupt a charge or stance", cost: 3, type: "interrupt", stat: "mind", base: 2, chargeBonus: 6, stanceBonus: 3 },
+      },
+      stances: {
+        iron: { see: "Braced like a hull — plain blows ring off; threads slip in.", strike: "min1", kind: "iron" },
+        flow: { see: "Running like a current — knots slide off; a plain blow shears it.", strike: "+2", kind: "flow" },
+      },
+    },
   },
-  // Dynamic go: targets must be declared for the reachability audit.
-  auditEdges: {
-    study: ["study_found", "study_miss"],
-    cellar: ["cellar_key", "cellar_fail"],
-    accuse: ["end_solved", "end_wrong"],
-  },
-  endings: ["end_solved", "end_wrong", "end_flee"],
+
+  // Dynamic go: in `gallery` one choice resolves its target via check(); declare
+  // both possible destinations so reachability stays complete.
+  auditEdges: { gallery: ["sealeddoor", "guardroom"] },
+
+  endings: ["victory", "defeat", "escape"],
 };
 
 
 /* ---- bootstrap ---- */
-var __THEME = {"--accent":"#b08d57","--bg":"#0d0b10"};
+var __THEME = {"--bg":"#06090f","--bg2":"#141b2c","--panel":"#121826","--ink":"#cfd6e4","--dim":"#7d889e","--accent":"#5ad6e8","--accent2":"#a8862e","--good":"#58b890","--bad":"#e0606a","--cool":"#7ea7d8","--line":"#242e45"};
 var __game = createGame(__GAME_DEF, { scenes: scenes, enemies: __GAME_DEF.enemies || {}, storage: localStorageAdapter() });
 var __jump = new URLSearchParams(location.search).get("scene");
 if (__jump && scenes[__jump]) { __game.start(Date.now()); __game.goto(__jump); } else __game.resume(Date.now());
